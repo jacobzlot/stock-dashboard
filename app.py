@@ -190,22 +190,13 @@ def _ensure_shortlist_table():
         cur.execute("""
             CREATE TABLE IF NOT EXISTS shortlist (
                 ticker VARCHAR(10) PRIMARY KEY,
-                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                added_price NUMERIC
+                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        # Migration: add added_price if missing
-        try:
-            cur.execute("""
-                ALTER TABLE shortlist ADD COLUMN IF NOT EXISTS added_price NUMERIC
-            """)
-        except Exception:
-            pass
         db.commit()
 
 
 def _load_shortlist():
-    """Return list of ticker strings (backward-compatible)."""
     if USE_POSTGRES:
         try:
             _ensure_shortlist_table()
@@ -217,64 +208,22 @@ def _load_shortlist():
     else:
         if os.path.exists(SHORTLIST_PATH):
             with open(SHORTLIST_PATH, 'r') as f:
-                data = json.load(f)
-            # Handle both old format (list of strings) and new format (list of dicts)
-            if data and isinstance(data[0], dict):
-                return [d['ticker'] for d in data]
-            return data
+                return json.load(f)
         return []
 
 
-def _load_shortlist_detailed():
-    """Return list of dicts with ticker, added_price, added_at."""
-    if USE_POSTGRES:
-        try:
-            _ensure_shortlist_table()
-            cols, rows = db_execute(
-                "SELECT ticker, added_price, added_at FROM shortlist ORDER BY ticker"
-            )
-            result = []
-            for r in rows:
-                val = r[1]
-                if hasattr(val, 'as_tuple'):
-                    val = float(val)
-                result.append({
-                    'ticker': r[0],
-                    'added_price': val,
-                    'added_at': r[2].isoformat() if r[2] else None,
-                })
-            return result
-        except Exception:
-            get_db().rollback()
-            return []
-    else:
-        if os.path.exists(SHORTLIST_PATH):
-            with open(SHORTLIST_PATH, 'r') as f:
-                data = json.load(f)
-            # Handle old format (list of strings)
-            if data and isinstance(data[0], str):
-                return [{'ticker': t, 'added_price': None, 'added_at': None} for t in data]
-            return data
-        return []
-
-
-def _save_shortlist_add(ticker, price=None):
+def _save_shortlist_add(ticker):
     if USE_POSTGRES:
         _ensure_shortlist_table()
         db_execute_write(
-            f"INSERT INTO shortlist (ticker, added_price) VALUES ({P}, {P}) ON CONFLICT (ticker) DO NOTHING",
-            (ticker, price)
+            f"INSERT INTO shortlist (ticker) VALUES ({P}) ON CONFLICT (ticker) DO NOTHING",
+            (ticker,)
         )
     else:
-        sl = _load_shortlist_detailed()
-        tickers = [d['ticker'] for d in sl]
-        if ticker not in tickers:
-            sl.append({
-                'ticker': ticker,
-                'added_price': price,
-                'added_at': datetime.utcnow().isoformat(),
-            })
-        _save_shortlist_file_detailed(sl)
+        sl = _load_shortlist()
+        if ticker not in sl:
+            sl.append(ticker)
+        _save_shortlist_file(sl)
 
 
 def _save_shortlist_remove(ticker):
@@ -282,23 +231,15 @@ def _save_shortlist_remove(ticker):
         _ensure_shortlist_table()
         db_execute_write(f"DELETE FROM shortlist WHERE ticker = {P}", (ticker,))
     else:
-        sl = _load_shortlist_detailed()
-        sl = [d for d in sl if d['ticker'] != ticker]
-        _save_shortlist_file_detailed(sl)
+        sl = _load_shortlist()
+        sl = [t for t in sl if t != ticker]
+        _save_shortlist_file(sl)
 
 
 def _save_shortlist_file(tickers):
-    """SQLite fallback: save list of ticker strings (legacy compat)."""
-    detailed = []
-    for t in sorted(set(tickers)):
-        detailed.append({'ticker': t, 'added_price': None, 'added_at': None})
-    _save_shortlist_file_detailed(detailed)
-
-
-def _save_shortlist_file_detailed(entries):
-    """SQLite fallback: save list of dicts to JSON file."""
+    """SQLite fallback: save to JSON file."""
     with open(SHORTLIST_PATH, 'w') as f:
-        json.dump(entries, f)
+        json.dump(sorted(set(tickers)), f)
 
 
 # ── Column metadata ───────────────────────────────────────
@@ -697,9 +638,6 @@ def api_stock_detail(ticker):
 
 @app.route("/api/shortlist", methods=["GET"])
 def api_shortlist_get():
-    detailed = request.args.get("detailed", "false").lower() == "true"
-    if detailed:
-        return jsonify(_load_shortlist_detailed())
     return jsonify(_load_shortlist())
 
 
@@ -708,13 +646,12 @@ def api_shortlist_update():
     body = request.get_json()
     ticker = body.get("ticker")
     action = body.get("action", "toggle")
-    price = body.get("price")  # price at time of adding
 
     sl = _load_shortlist()
     currently_in = ticker in sl
 
     if action == "add" or (action == "toggle" and not currently_in):
-        _save_shortlist_add(ticker, price)
+        _save_shortlist_add(ticker)
         shortlisted = True
     elif action == "remove" or (action == "toggle" and currently_in):
         _save_shortlist_remove(ticker)
@@ -724,7 +661,6 @@ def api_shortlist_update():
 
     return jsonify({
         "shortlist": _load_shortlist(),
-        "shortlist_detailed": _load_shortlist_detailed(),
         "ticker": ticker,
         "shortlisted": shortlisted,
     })
@@ -752,7 +688,7 @@ def api_shortlist_bulk():
         else:
             _save_shortlist_file(tickers)
 
-    return jsonify({"shortlist": _load_shortlist(), "shortlist_detailed": _load_shortlist_detailed()})
+    return jsonify({"shortlist": _load_shortlist()})
 
 
 @app.route("/api/industry_stats")
@@ -931,551 +867,101 @@ def api_metrics_guide():
 # ── Metrics reference data ─────────────────────────────────
 
 METRICS_GUIDE = {
-    "price": {
-        "name": "Price", "direction": "neutral", "good_range": "Context-dependent",
-        "desc": "Current trading price per share.",
-        "calc": "Determined by supply and demand on the exchange.",
-        "detail": "Price alone is meaningless without context. A $5 stock is not inherently cheaper than a $500 stock. Valuation ratios (P/E, P/S, etc.) are what matter for determining if a stock is cheap or expensive.",
-    },
-    "market_cap": {
-        "name": "Market Cap", "direction": "neutral", "good_range": "Mega >200B, Large 10-200B, Mid 2-10B, Small 300M-2B",
-        "desc": "Total market value of a company's outstanding shares.",
-        "calc": "Market Cap = Current Share Price x Total Shares Outstanding.",
-        "detail": "Used for classification. Compare metrics to companies in the same market cap tier. Small caps often have higher growth but more risk than large caps. Mega Cap: >$200B, Large Cap: $10B-$200B, Mid Cap: $2B-$10B, Small Cap: $300M-$2B, Micro Cap: <$300M.",
-    },
-    "enterprise_value": {
-        "name": "Enterprise Value", "direction": "neutral", "good_range": "Compare to Market Cap",
-        "desc": "Comprehensive measure of total company value, accounting for debt and cash. The theoretical takeover price.",
-        "calc": "EV = Market Cap + Total Debt - Cash & Cash Equivalents.",
-        "detail": "Used as a denominator in EV/EBITDA, EV/Sales. A company with much lower EV than market cap has a strong net cash position. Much higher EV than market cap indicates heavy debt.",
-    },
     "pe_ratio": {
         "name": "P/E Ratio", "direction": "lower", "good_range": "10-25",
-        "desc": "Price relative to earnings. The most widely used valuation metric.",
-        "calc": "P/E = Current Share Price / Earnings Per Share (TTM).",
-        "detail": "Lower is generally cheaper, but must compare to industry peers. S&P 500 historical average: ~15-20. Growth stocks: 25-60+ is common. Value stocks: 5-15 is common. Negative P/E means the company is losing money. Very high P/E (>50) means the market expects strong future growth OR the stock is overvalued. Tech companies routinely trade at higher P/Es than utilities or banks.",
+        "desc": "Price relative to earnings. Lower = cheaper. Compare within industry.",
     },
     "forward_pe": {
         "name": "Forward P/E", "direction": "lower", "good_range": "Below trailing P/E",
-        "desc": "P/E using estimated future earnings instead of trailing.",
-        "calc": "Forward P/E = Current Share Price / Estimated EPS (next 12 months).",
-        "detail": "Lower than trailing P/E means earnings are expected to grow (positive signal). Higher than trailing P/E means earnings expected to decline (negative signal). Compare to industry forward P/E averages.",
+        "desc": "P/E using estimated future earnings. Lower than trailing = expected growth.",
     },
     "peg_ratio": {
         "name": "PEG Ratio", "direction": "lower", "good_range": "<1 undervalued, 1 fair",
-        "desc": "P/E adjusted for expected earnings growth rate.",
-        "calc": "PEG = P/E Ratio / Expected Annual EPS Growth Rate (usually next 5 years).",
-        "detail": "<1 = potentially undervalued relative to growth (Peter Lynch's rule of thumb). 1 = fairly valued. >1 = potentially overvalued. >2 = expensive even accounting for growth. Caution: relies on growth estimates which can be wrong. Does not work for companies with negative earnings or negative growth.",
+        "desc": "P/E adjusted for growth. <1 = potentially undervalued relative to growth.",
     },
     "ps_ratio": {
         "name": "P/S Ratio", "direction": "lower", "good_range": "<3 for most industries",
         "desc": "Price relative to revenue. Useful for unprofitable companies.",
-        "calc": "P/S = Market Cap / Total Revenue (TTM), or Price / Revenue Per Share.",
-        "detail": "Lower is generally better. <2 is cheap for most industries. High-growth SaaS companies can trade at 10-30x sales. Established companies: <1 is very cheap, 1-3 is typical. Varies enormously by sector.",
     },
     "pb_ratio": {
         "name": "P/B Ratio", "direction": "lower", "good_range": "1-3",
-        "desc": "Price relative to book value (net assets).",
-        "calc": "P/B = Current Share Price / Book Value Per Share.",
-        "detail": "<1 = stock is trading below liquidation value (could be a bargain or value trap). 1-3 = typical range. >3 = premium to book, common for asset-light companies (tech, pharma). Very useful for banks and financial companies. Less useful for tech companies whose value is in intangible assets. Negative book value is a red flag.",
-    },
-    "pc_ratio": {
-        "name": "P/C Ratio", "direction": "lower", "good_range": "Lower = more cash cushion",
-        "desc": "Price relative to cash per share on the balance sheet.",
-        "calc": "P/C = Share Price / Cash Per Share.",
-        "detail": "Lower means the company has more cash relative to its price. P/C < 1 would mean more cash per share than the stock price (rare but very attractive). Useful for assessing downside protection and financial flexibility.",
+        "desc": "Price relative to book value. <1 could be bargain. Critical for banks.",
     },
     "pfcf_ratio": {
         "name": "P/FCF", "direction": "lower", "good_range": "<20",
         "desc": "Price relative to free cash flow. Harder to manipulate than P/E.",
-        "calc": "P/FCF = Market Cap / Free Cash Flow. FCF = Operating Cash Flow - Capital Expenditures.",
-        "detail": "<15 = generally attractive. 15-25 = fairly valued. >25 = expensive unless high growth justifies it. Negative FCF means the company is burning cash (not necessarily bad for early-stage growth, but a red flag for mature companies). Many investors consider FCF more reliable than earnings.",
-    },
-    "ev_sales": {
-        "name": "EV/Sales", "direction": "lower", "good_range": "<3",
-        "desc": "Enterprise value relative to revenue. Accounts for debt/cash unlike P/S.",
-        "calc": "EV/Sales = Enterprise Value / Total Revenue (TTM).",
-        "detail": "Similar to P/S but uses enterprise value which accounts for debt and cash. <1 = very cheap (debt-adjusted value is less than annual revenue). Compare to industry averages and P/S ratio to see the impact of debt.",
     },
     "ev_ebitda": {
         "name": "EV/EBITDA", "direction": "lower", "good_range": "<12",
-        "desc": "Enterprise value to EBITDA. Capital-structure neutral valuation widely used in M&A.",
-        "calc": "EV/EBITDA = Enterprise Value / EBITDA (TTM).",
-        "detail": "<10 = generally considered cheap. 10-15 = fair value for many industries. >15 = expensive. Industry benchmarks matter enormously. Tech: 15-25 is common. Utilities: 8-12. Oil & Gas: 4-8. Widely used in mergers and acquisitions.",
-    },
-    "eps_ttm": {
-        "name": "EPS (TTM)", "direction": "higher", "good_range": "Positive and growing",
-        "desc": "Earnings per share over the trailing twelve months.",
-        "calc": "EPS = (Net Income - Preferred Dividends) / Weighted Average Shares Outstanding.",
-        "detail": "Positive and growing is good. Negative means the company is losing money. Compare to prior periods and analyst estimates. Beating estimates is a positive catalyst. The absolute number matters less than the trend and comparison to peers.",
-    },
-    "income": {
-        "name": "Net Income", "direction": "higher", "good_range": "Positive and growing",
-        "desc": "Total profit after all expenses, taxes, interest, and other costs.",
-        "calc": "Revenue - COGS - Operating Expenses - Interest - Taxes - Other Expenses.",
-        "detail": "Positive and growing is good. Compare growth rate to revenue growth. If income grows faster than revenue, margins are expanding. Negative income is acceptable for high-growth companies reinvesting heavily, but should have a path to profitability.",
-    },
-    "sales": {
-        "name": "Revenue", "direction": "higher", "good_range": "Positive and growing",
-        "desc": "Total revenue (sales) generated by the company.",
-        "calc": "Sum of all revenue from goods sold and services rendered.",
-        "detail": "The top line. Revenue growth is fundamental. Compare to prior periods and peers. Revenue growing faster than industry average is a positive sign.",
+        "desc": "Enterprise value to EBITDA. Capital-structure neutral valuation.",
     },
     "profit_margin": {
         "name": "Profit Margin", "direction": "higher", "good_range": ">10%",
-        "desc": "Net income as a percentage of revenue. The bottom-line profitability measure.",
-        "calc": "Profit Margin = Net Income / Revenue x 100%.",
-        "detail": ">20% = excellent. 10-20% = solid. 5-10% = average. <5% = thin but may be normal for some industries (retail/grocery). Negative means the company is losing money. Higher is better, and expanding margins over time is a very positive sign.",
+        "desc": "Net income as % of revenue. Higher = more profitable.",
     },
     "operating_margin": {
         "name": "Operating Margin", "direction": "higher", "good_range": ">15%",
-        "desc": "Operating income as a percentage of revenue, before interest and taxes.",
-        "calc": "Operating Margin = Operating Income / Revenue x 100%.",
-        "detail": ">20% = strong for most industries. 10-20% = healthy. <10% = thin margins (could be industry norm for retail, restaurants). Negative means the company is not operationally profitable. Expanding operating margins over time is a very positive sign.",
+        "desc": "Operating income as % of revenue. Shows operational efficiency.",
     },
     "gross_margin": {
         "name": "Gross Margin", "direction": "higher", "good_range": ">40%",
-        "desc": "Revenue minus cost of goods sold, as a percentage of revenue.",
-        "calc": "Gross Margin = (Revenue - Cost of Goods Sold) / Revenue x 100%.",
-        "detail": "Software/SaaS: 70-90%+ is excellent. Manufacturing: 25-45% is typical. Retail: 20-40% is typical. Grocery: 25-30%. Higher means more of each dollar is available for operating expenses and profit. Declining gross margin is a red flag.",
+        "desc": "Revenue minus COGS as % of revenue. Industry-dependent.",
     },
     "roe": {
         "name": "ROE", "direction": "higher", "good_range": ">15%",
-        "desc": "Return on equity. Measures how efficiently the company uses shareholder equity to generate profit.",
-        "calc": "ROE = Net Income / Shareholders' Equity x 100%.",
-        "detail": ">15% = generally strong. 10-15% = decent. <10% = below average. Very high ROE (>30%) can indicate either excellent management OR excessive leverage (check Debt/Equity). Negative ROE means net losses or negative equity. Use DuPont analysis to decompose: ROE = Profit Margin x Asset Turnover x Equity Multiplier.",
+        "desc": "Return on equity. >15% = strong. Very high may indicate leverage.",
     },
     "roa": {
         "name": "ROA", "direction": "higher", "good_range": ">5%",
         "desc": "Return on assets. How efficiently assets generate profit.",
-        "calc": "ROA = Net Income / Total Assets x 100%.",
-        "detail": ">10% = excellent. 5-10% = good. <5% = may be an asset-heavy industry (real estate, utilities). Negative means losing money. Compare to industry -- asset-light companies naturally have higher ROA.",
-    },
-    "roi": {
-        "name": "ROI", "direction": "higher", "good_range": ">10%",
-        "desc": "Return on investment. General measure of returns generated.",
-        "calc": "ROI = Net Profit / Total Investment x 100%.",
-        "detail": "Measures the overall return on invested resources. Higher is better. Compare to cost of capital and industry peers.",
     },
     "roic": {
         "name": "ROIC", "direction": "higher", "good_range": ">15%",
-        "desc": "Return on invested capital. Considered by many to be the most important profitability metric.",
-        "calc": "ROIC = NOPAT / Invested Capital. Invested Capital = Total Equity + Total Debt - Cash.",
-        "detail": ">15% = excellent value creator. 10-15% = solid. ROIC > WACC (Weighted Average Cost of Capital) means the company is creating value. ROIC < WACC means destroying value. Consistently high ROIC over many years is a hallmark of great businesses (Buffett/Munger philosophy).",
+        "desc": "Return on invested capital. Should exceed cost of capital.",
     },
     "debt_to_equity": {
         "name": "Debt/Equity", "direction": "lower", "good_range": "<1.0",
-        "desc": "Total debt relative to equity. Measures financial leverage.",
-        "calc": "Debt/Equity = Total Debt / Total Shareholders' Equity.",
-        "detail": "<0.5 = conservative, low leverage. 0.5-1.0 = moderate. 1.0-2.0 = high leverage (may be appropriate for capital-intensive industries). >2.0 = very high leverage, higher risk. Negative means negative equity (red flag). Industry context is crucial: utilities and REITs normally have higher D/E; tech companies tend to have lower.",
-    },
-    "lt_debt_to_equity": {
-        "name": "LT Debt/Equity", "direction": "lower", "good_range": "<1.0",
-        "desc": "Long-term debt relative to equity. Excludes short-term obligations.",
-        "calc": "LT Debt/Equity = Long-Term Debt / Total Shareholders' Equity.",
-        "detail": "Same guidelines as total Debt/Equity. If there's a big gap between total D/E and LT D/E, the company has significant short-term debt, which could be a liquidity risk.",
+        "desc": "Total debt vs equity. <0.5 conservative, >2 high leverage.",
     },
     "current_ratio": {
         "name": "Current Ratio", "direction": "higher", "good_range": ">1.5",
-        "desc": "Ability to pay short-term obligations with short-term assets.",
-        "calc": "Current Ratio = Current Assets / Current Liabilities.",
-        "detail": ">2.0 = very comfortable. 1.5-2.0 = healthy. 1.0-1.5 = adequate but watch closely. <1.0 = may struggle to meet short-term obligations (red flag unless normal for the industry). Very high (>4) could mean the company is not efficiently deploying assets.",
+        "desc": "Current assets vs liabilities. <1 = potential liquidity issues.",
     },
     "quick_ratio": {
         "name": "Quick Ratio", "direction": "higher", "good_range": ">1.0",
-        "desc": "Conservative liquidity measure. Excludes inventory.",
-        "calc": "Quick Ratio = (Cash + Short-Term Investments + Accounts Receivable) / Current Liabilities.",
-        "detail": ">1.0 = can cover short-term liabilities without selling inventory (the standard benchmark). 0.5-1.0 = somewhat reliant on inventory. <0.5 = potential liquidity issues. Particularly important for companies with slow-moving inventory.",
-    },
-    "cash_per_share": {
-        "name": "Cash/Share", "direction": "higher", "good_range": "Higher = more flexibility",
-        "desc": "Cash and equivalents per share on the balance sheet.",
-        "calc": "Cash/sh = (Cash + Equivalents + Short-Term Investments) / Shares Outstanding.",
-        "detail": "Higher means more financial flexibility. Compare to stock price -- if cash/sh is a significant percentage of the stock price, there's a cash cushion. Some investors subtract cash/sh from price to get an ex-cash price for valuation.",
-    },
-    "book_per_share": {
-        "name": "Book/Share", "direction": "higher", "good_range": "Positive and growing",
-        "desc": "Net asset value per share. What shareholders would theoretically receive in liquidation.",
-        "calc": "Book/sh = Total Shareholders' Equity / Shares Outstanding.",
-        "detail": "Positive and growing means building shareholder value. Negative book value means liabilities exceed assets (very concerning). Compare to stock price via P/B ratio. Useful for banks and asset-heavy companies, less useful for tech/service companies.",
+        "desc": "Liquid assets vs liabilities (excl. inventory).",
     },
     "rsi": {
         "name": "RSI (14)", "direction": "neutral", "good_range": "30-70",
-        "desc": "Momentum oscillator measuring overbought/oversold conditions.",
-        "calc": "RSI = 100 - [100 / (1 + (Avg Gain over 14 periods / Avg Loss over 14 periods))].",
-        "detail": "<30 = oversold (potential buying opportunity). 30-70 = neutral range. >70 = overbought (potential selling opportunity or caution). RSI divergence (price makes new high but RSI doesn't) can signal a reversal. Works best in ranging markets, less reliable in strong trends.",
+        "desc": "Momentum oscillator. <30 = oversold. >70 = overbought.",
     },
     "beta": {
         "name": "Beta", "direction": "neutral", "good_range": "0.5-1.5",
-        "desc": "Volatility relative to the overall market (S&P 500).",
-        "calc": "Beta = Covariance(Stock Returns, Market Returns) / Variance(Market Returns). Typically calculated over 5 years of monthly returns.",
-        "detail": "Beta 1.0 = stock moves in line with market. >1.0 = more volatile (1.5 means 50% more movement than market). <1.0 = less volatile. <0 = moves inversely to market (rare). High-beta stocks amplify both gains and losses. Conservative investors prefer lower beta.",
-    },
-    "atr": {
-        "name": "ATR (14)", "direction": "neutral", "good_range": "Compare to stock price",
-        "desc": "Average True Range. Measures average daily price volatility.",
-        "calc": "True Range = Max of (High-Low, |High-Prev Close|, |Low-Prev Close|). ATR = 14-period moving average of True Range.",
-        "detail": "Not good or bad -- it's a volatility measure. Higher ATR = more volatile (bigger daily swings). Useful for setting stop-losses (e.g., 2x ATR below entry) and position sizing. Compare ATR to stock price for context. ATR of $2 means different things for a $10 stock vs a $200 stock.",
-    },
-    "volatility_week": {
-        "name": "Volatility Week", "direction": "neutral", "good_range": "Lower = more stable",
-        "desc": "Annualized standard deviation of weekly returns.",
-        "calc": "Standard deviation of weekly returns, annualized (x sqrt(52)).",
-        "detail": "Lower volatility means more predictable price movements. Higher means larger swings (higher risk and potential reward). Compare to sector and market volatility.",
-    },
-    "volatility_month": {
-        "name": "Volatility Month", "direction": "neutral", "good_range": "Lower = more stable",
-        "desc": "Annualized standard deviation of monthly returns.",
-        "calc": "Standard deviation of monthly returns, annualized (x sqrt(12)).",
-        "detail": "Lower volatility means more predictable price movements. Higher means larger swings. Compare to sector and market volatility.",
-    },
-    "sma20": {
-        "name": "SMA20 %", "direction": "neutral", "good_range": "Above = short-term uptrend",
-        "desc": "Percentage distance from the 20-day simple moving average. Short-term trend indicator.",
-        "calc": "SMA20 = Sum of Last 20 Closing Prices / 20. Shown as % distance from SMA.",
-        "detail": "Price above SMA20 = short-term uptrend. Price below = short-term downtrend. Large negative values suggest the stock is potentially oversold in the short term.",
-    },
-    "sma50": {
-        "name": "SMA50 %", "direction": "neutral", "good_range": "Above = intermediate uptrend",
-        "desc": "Percentage distance from the 50-day simple moving average. Intermediate trend indicator.",
-        "calc": "SMA50 = Sum of Last 50 Closing Prices / 50. Shown as % distance from SMA.",
-        "detail": "Price above SMA50 = intermediate uptrend. SMA50 crossing above SMA200 = 'Golden Cross' (bullish). SMA50 crossing below SMA200 = 'Death Cross' (bearish).",
-    },
-    "sma200": {
-        "name": "SMA200 %", "direction": "neutral", "good_range": "Above = long-term uptrend",
-        "desc": "Percentage distance from the 200-day simple moving average. The most widely followed long-term trend indicator.",
-        "calc": "SMA200 = Sum of Last 200 Closing Prices / 200. Shown as % distance from SMA.",
-        "detail": "Price above SMA200 = long-term uptrend (most institutions only buy above the 200-day). Below = long-term downtrend. The further below SMA200, the more beaten down the stock is.",
+        "desc": "Volatility vs market. 1 = market-like. >1 = more volatile.",
     },
     "short_float": {
         "name": "Short Float", "direction": "lower", "good_range": "<5%",
-        "desc": "Percentage of float sold short by bearish investors.",
-        "calc": "Short Float = Shares Sold Short / Float x 100%.",
-        "detail": "<5% = low short interest (minimal bearish sentiment). 5-10% = moderate. 10-20% = elevated (significant bearish bet). >20% = very high, potential for short squeeze if stock rises. High short interest can be bearish (many expect decline) or can lead to explosive upside if sentiment shifts.",
-    },
-    "short_ratio": {
-        "name": "Short Ratio", "direction": "lower", "good_range": "<3 days",
-        "desc": "Days it would take short sellers to cover their positions based on average volume.",
-        "calc": "Short Ratio = Shares Sold Short / Average Daily Volume.",
-        "detail": "<2 days = short sellers can cover quickly (lower squeeze potential). 2-5 days = moderate. >5 days = harder to cover (higher squeeze potential). >10 days = very crowded short trade.",
-    },
-    "short_interest": {
-        "name": "Short Interest", "direction": "lower", "good_range": "Compare to historical",
-        "desc": "Total number of shares currently sold short.",
-        "calc": "Reported by exchanges twice per month.",
-        "detail": "Compare to historical levels and float. Rising short interest = growing bearish sentiment. Falling = shorts are covering. Useful in conjunction with short float % and short ratio.",
+        "desc": "% of float sold short. >20% = high bearish sentiment / squeeze potential.",
     },
     "revenue_growth_ttm": {
         "name": "Revenue Growth TTM", "direction": "higher", "good_range": ">10%",
-        "desc": "Year-over-year revenue growth on a trailing twelve month basis.",
-        "calc": "(Revenue TTM current - Revenue TTM prior year) / Revenue TTM prior year x 100%.",
-        "detail": "Positive and consistent = good. >20% = strong growth. >50% = hyper-growth. Negative = revenue declining (concerning unless temporary/cyclical). Compare to industry growth rates and the company's own historical trend.",
+        "desc": "Year-over-year revenue growth. Positive = growing business.",
     },
     "eps_growth_ttm": {
         "name": "EPS Growth TTM", "direction": "higher", "good_range": ">15%",
-        "desc": "Year-over-year earnings per share growth.",
-        "calc": "(EPS TTM current - EPS TTM prior year) / |EPS TTM prior year| x 100%.",
-        "detail": "Positive and ideally higher than revenue growth (implies margin expansion). >25% = strong. Negative = earnings declining. Can be volatile due to one-time charges and tax effects.",
-    },
-    "eps_growth_next_y": {
-        "name": "EPS Growth Next Y", "direction": "higher", "good_range": ">15%",
-        "desc": "Analyst consensus estimate for EPS growth over the next 12 months.",
-        "calc": "(Estimated Next Year EPS - Current Year EPS) / |Current Year EPS| x 100%.",
-        "detail": "Positive = analysts expect earnings to grow. >15% = solid expected growth. >25% = strong. Negative = analysts expect decline. Caution: analyst estimates are often wrong, especially for smaller companies.",
-    },
-    "eps_growth_next_5y": {
-        "name": "EPS Growth Next 5Y", "direction": "higher", "good_range": ">15%",
-        "desc": "Analyst consensus estimate for annualized EPS growth over the next 5 years.",
-        "calc": "Based on long-range analyst projections (compound annual growth rate).",
-        "detail": ">15% = strong long-term growth expected. 10-15% = solid. <10% = moderate. Used in PEG ratio calculation. Long-term estimates are inherently less reliable than short-term.",
-    },
-    "eps_this_y": {
-        "name": "EPS This Y", "direction": "higher", "good_range": "Higher than last year",
-        "desc": "Analyst estimate for full-year EPS for the current fiscal year.",
-        "calc": "Compiled from individual analyst models and estimates.",
-        "detail": "Compare to last year's actual EPS. An increase = expected growth. Upward revisions are bullish; downward revisions are bearish.",
-    },
-    "eps_next_q": {
-        "name": "EPS Next Q", "direction": "higher", "good_range": "Beat estimates",
-        "desc": "Analyst consensus estimate for EPS in the next fiscal quarter.",
-        "calc": "Compiled from individual analyst models and estimates.",
-        "detail": "Compare to current quarter to see trajectory. Upward revisions to estimates are bullish.",
-    },
-    "eps_past_3y": {
-        "name": "EPS Past 3Y", "direction": "higher", "good_range": ">15% CAGR",
-        "desc": "Compound annual growth rate of EPS over the past 3 years.",
-        "calc": "CAGR = (EPS_end / EPS_start)^(1/3) - 1.",
-        "detail": "Positive = earnings have been growing historically. >15% CAGR = strong track record. Compare past growth to forward estimates. Decelerating growth may indicate a maturing business.",
-    },
-    "eps_past_5y": {
-        "name": "EPS Past 5Y", "direction": "higher", "good_range": ">15% CAGR",
-        "desc": "Compound annual growth rate of EPS over the past 5 years.",
-        "calc": "CAGR = (EPS_end / EPS_start)^(1/5) - 1.",
-        "detail": "Longer track record than 3Y. Positive = earnings growing. >15% = strong. Compare to forward estimates to assess trajectory.",
-    },
-    "sales_past_3y": {
-        "name": "Sales Past 3Y", "direction": "higher", "good_range": ">10% CAGR",
-        "desc": "Compound annual growth rate of revenue over the past 3 years.",
-        "calc": "CAGR = (Revenue_end / Revenue_start)^(1/3) - 1.",
-        "detail": "Positive = revenue growing. >10% CAGR = solid. Compare to EPS growth -- if revenue grows faster than earnings, margins are contracting.",
-    },
-    "sales_past_5y": {
-        "name": "Sales Past 5Y", "direction": "higher", "good_range": ">10% CAGR",
-        "desc": "Compound annual growth rate of revenue over the past 5 years.",
-        "calc": "CAGR = (Revenue_end / Revenue_start)^(1/5) - 1.",
-        "detail": "Longer track record. Positive = revenue growing. Compare to EPS growth to check margin trends.",
-    },
-    "sales_qyq": {
-        "name": "Sales Q/Q", "direction": "higher", "good_range": "Positive",
-        "desc": "Quarter-over-quarter sequential revenue growth.",
-        "calc": "(Current Q Revenue - Previous Q Revenue) / Previous Q Revenue x 100%.",
-        "detail": "Shows momentum but is affected by seasonality. Year-over-year comparisons are usually more meaningful for most businesses.",
-    },
-    "eps_qoq": {
-        "name": "EPS Q/Q", "direction": "higher", "good_range": "Positive",
-        "desc": "Quarter-over-quarter sequential EPS growth.",
-        "calc": "(Current Q EPS - Previous Q EPS) / |Previous Q EPS| x 100%.",
-        "detail": "Can show momentum but affected by seasonality. Year-over-year comparisons are usually more meaningful.",
-    },
-    "eps_surprise": {
-        "name": "EPS Surprise", "direction": "higher", "good_range": "Positive = beat",
-        "desc": "How much actual EPS exceeded or missed analyst estimates.",
-        "calc": "Surprise = (Actual EPS - Estimate) / |Estimate| x 100%.",
-        "detail": "Positive = beat estimates (bullish). Negative = missed (bearish). Consistent beats suggest conservative guidance or strong execution. The market's reaction to the surprise often matters more than the number itself.",
-    },
-    "sales_surprise": {
-        "name": "Sales Surprise", "direction": "higher", "good_range": "Positive = beat",
-        "desc": "How much actual revenue exceeded or missed analyst estimates.",
-        "calc": "Surprise = (Actual Revenue - Estimate) / |Estimate| x 100%.",
-        "detail": "Positive = revenue beat (bullish). Revenue beats combined with EPS beats are the strongest signal. Revenue misses are often more concerning than EPS misses.",
+        "desc": "Year-over-year earnings growth.",
     },
     "insider_own": {
         "name": "Insider Ownership", "direction": "higher", "good_range": "5-20%",
-        "desc": "Percentage of shares held by company insiders (officers, directors).",
-        "calc": "Total Insider Shares / Shares Outstanding x 100%.",
-        "detail": "5-20% = healthy alignment of management with shareholders. >30% = strong alignment but watch for control issues. <1% = insiders have little skin in the game. Very high insider ownership can also mean low public float.",
-    },
-    "insider_trans": {
-        "name": "Insider Trans", "direction": "neutral", "good_range": "Buying = bullish",
-        "desc": "Percentage of insider transactional activity relative to their holdings.",
-        "calc": "Reported percentage of insider transactional activity.",
-        "detail": "Insider BUYING is almost always a positive signal (they know the company best). Insider SELLING is a weaker negative signal -- insiders sell for many reasons (diversification, taxes, expenses). Low transaction volume is normal. Cluster buying (multiple insiders buying) is especially strong.",
+        "desc": "% held by insiders. Shows alignment with shareholders.",
     },
     "inst_own": {
         "name": "Institutional Own", "direction": "higher", "good_range": "50-80%",
-        "desc": "Percentage of shares held by institutional investors.",
-        "calc": "Total Institutional Shares / Shares Outstanding x 100%.",
-        "detail": "50-80% = healthy institutional interest (implies validation through due diligence). >80% = very heavily institutional, potential for large block sales. <30% = low interest, could be underfollowed (potential hidden gem or value trap). Increasing institutional ownership is a positive signal.",
-    },
-    "inst_trans": {
-        "name": "Institutional Trans", "direction": "higher", "good_range": "Positive = accumulating",
-        "desc": "Net change in institutional ownership over the last 3 months.",
-        "calc": "Current Institutional Holdings % - Holdings % 3 Months Ago.",
-        "detail": "Positive = institutions are accumulating (bullish). Negative = institutions are selling (bearish or cautious). Large positive delta with price declines could indicate smart money buying the dip.",
-    },
-    "shares_outstanding": {
-        "name": "Shares Outstanding", "direction": "neutral", "good_range": "Watch for trends",
-        "desc": "Total shares issued by the company, including restricted shares.",
-        "calc": "Reported by the company in SEC filings.",
-        "detail": "Increasing shares = dilution (bad for existing shareholders). Decreasing shares = buybacks (generally positive). Watch the trend over time rather than the absolute number.",
-    },
-    "shares_float": {
-        "name": "Shares Float", "direction": "neutral", "good_range": "Higher = more liquid",
-        "desc": "Shares available for public trading (excludes insider/restricted).",
-        "calc": "Float = Shares Outstanding - Restricted Shares - Insider Holdings.",
-        "detail": "Lower float = more volatile price movements. Higher float = more liquidity and stability. Very low float stocks (<10M) can be extremely volatile.",
-    },
-    "target_price": {
-        "name": "Target Price", "direction": "higher", "good_range": "Above current price",
-        "desc": "Average analyst 12-month price target.",
-        "calc": "Average of all individual analyst price targets.",
-        "detail": "Target above current price = analysts see upside. Below = analysts see downside. The further above, the more bullish consensus is. Caution: analyst targets are often lagging and biased upward (most analysts maintain buy ratings).",
+        "desc": "% held by institutions. Higher = more validation.",
     },
     "recommendation": {
         "name": "Analyst Rec", "direction": "lower", "good_range": "1-2 (Buy)",
-        "desc": "Average analyst recommendation. 1=Strong Buy through 5=Strong Sell.",
-        "calc": "Average of all analyst ratings on a 1-5 scale.",
-        "detail": "<2.0 = consensus buy. 2.0-3.0 = moderate buy to hold. >3.0 = hold to sell. Upgrades/downgrades (changes in rating) are often more impactful than the absolute level. Be aware of analyst bias -- very few stocks receive sell ratings.",
-    },
-    "rel_volume": {
-        "name": "Relative Volume", "direction": "neutral", "good_range": "~1.0 normal, >1.5 elevated",
-        "desc": "Current volume compared to average. Shows unusual trading activity.",
-        "calc": "Relative Volume = Current Volume / Average Volume (typically 50-day average).",
-        "detail": "~1.0 = normal. >1.5 = above-average interest. >2.0 = significantly elevated (watch for news, earnings, breakout). <0.5 = unusually low (low conviction in current move). High relative volume on breakouts confirms the move. Low volume breakouts more likely to fail.",
-    },
-    "volume": {
-        "name": "Volume", "direction": "neutral", "good_range": "Compare to average",
-        "desc": "Total shares traded in the most recent session.",
-        "calc": "Sum of all shares exchanged during the trading day.",
-        "detail": "Compare to average volume. Volume confirms price moves -- rising price on high volume is more meaningful than on low volume.",
-    },
-    "avg_volume": {
-        "name": "Avg Volume", "direction": "neutral", "good_range": ">1M for liquidity",
-        "desc": "Average daily trading volume (typically 50-day or 3-month).",
-        "calc": "Sum of daily volumes over period / Number of trading days.",
-        "detail": "Higher = more liquid (easier to trade without moving price). >1M shares/day = liquid for most investors. <100K/day = potentially illiquid, wider spreads, harder to exit.",
-    },
-    "week_52_high": {
-        "name": "52W High", "direction": "neutral", "good_range": "Near = strong momentum",
-        "desc": "Highest price traded in the past 52 weeks.",
-        "calc": "Tracked from daily price data over the past year.",
-        "detail": "Trading near 52W High = strong momentum (or potentially extended). Used with the % distance metric to gauge where the stock sits in its range.",
-    },
-    "week_52_high_pct": {
-        "name": "52W High %", "direction": "neutral", "good_range": "Near 0% = at highs",
-        "desc": "Percentage below the 52-week high.",
-        "calc": "(Current Price - 52W High) / 52W High x 100%.",
-        "detail": "Near 0% means trading near the high. Large negatives mean far below the high (beaten down). A stock down >50% from highs is either a value opportunity or a falling knife -- check fundamentals.",
-    },
-    "week_52_low": {
-        "name": "52W Low", "direction": "neutral", "good_range": "Far above = strong performance",
-        "desc": "Lowest price traded in the past 52 weeks.",
-        "calc": "Tracked from daily price data over the past year.",
-        "detail": "Trading near 52W Low = beaten down (potential value or falling knife). Used with the % distance metric.",
-    },
-    "week_52_low_pct": {
-        "name": "52W Low %", "direction": "neutral", "good_range": "Higher = recovered well",
-        "desc": "Percentage above the 52-week low.",
-        "calc": "(Current Price - 52W Low) / 52W Low x 100%.",
-        "detail": "Shows how far the stock has recovered from its low. Very high values mean strong recovery. Near 0% means still near the lows.",
-    },
-    "prev_close": {
-        "name": "Prev Close", "direction": "neutral", "good_range": "Reference point",
-        "desc": "Closing price from the previous trading session.",
-        "calc": "Last traded price at market close of the prior day.",
-        "detail": "Reference point for today's trading. The day's change is calculated relative to this value.",
-    },
-    "price_change": {
-        "name": "Change %", "direction": "neutral", "good_range": "Context-dependent",
-        "desc": "Percentage change from the prior day's close.",
-        "calc": "(Current Price - Previous Close) / Previous Close x 100%.",
-        "detail": "Large single-day moves often correlate with news events or earnings. Context-dependent -- not inherently good or bad.",
-    },
-    "dividend_ttm": {
-        "name": "Dividend TTM", "direction": "higher", "good_range": "Positive and growing",
-        "desc": "Total dividends paid per share over the trailing twelve months.",
-        "calc": "Sum of all dividends paid per share in the last 12 months.",
-        "detail": "Higher is better for income investors. Compare to historical dividend. Growing dividends is positive. Must be evaluated in context of payout ratio and company financials.",
-    },
-    "dividend_yield": {
-        "name": "Dividend Yield", "direction": "higher", "good_range": "2-5% for most",
-        "desc": "Annual dividend as a percentage of the stock price.",
-        "calc": "Dividend Yield = Annual Dividend Per Share / Current Stock Price x 100%.",
-        "detail": "Higher yield means more income per dollar invested, but very high yields (>8%) may signal the market expects a dividend cut. Compare to sector averages. Must check payout ratio sustainability.",
-    },
-    "dividend_est": {
-        "name": "Dividend Est", "direction": "higher", "good_range": "Higher than TTM",
-        "desc": "Expected annual dividend based on most recent declared rate.",
-        "calc": "Based on the most recently declared dividend rate, annualized.",
-        "detail": "Compare to TTM dividend. Higher estimate = expected dividend increase. Lower = potential cut.",
-    },
-    "dividend_yield_est": {
-        "name": "Div Yield Est", "direction": "higher", "good_range": "2-5%",
-        "desc": "Estimated dividend yield based on forward dividend estimate.",
-        "calc": "Estimated Annual Dividend / Current Price x 100%.",
-        "detail": "Forward-looking version of dividend yield. Compare to current yield to see expected changes.",
-    },
-    "payout_ratio": {
-        "name": "Payout Ratio", "direction": "neutral", "good_range": "<60% sustainable",
-        "desc": "Percentage of earnings paid out as dividends.",
-        "calc": "Payout Ratio = Dividends Per Share / Earnings Per Share x 100%.",
-        "detail": "<50% = sustainable, room to grow dividend. 50-75% = moderate. >75% = high, dividend at risk if earnings decline. >100% = paying more than earned (unsustainable long-term). REITs and MLPs are exceptions -- required to pay high payout ratios.",
-    },
-    "ex_dividend_date": {
-        "name": "Ex-Div Date", "direction": "neutral", "good_range": "Informational",
-        "desc": "Date after which new buyers will NOT receive the next dividend.",
-        "calc": "Set by the company's board of directors.",
-        "detail": "You must own the stock BEFORE this date to receive the dividend. Important for timing dividend capture strategies.",
-    },
-    "dividend_gr_3y": {
-        "name": "Div Growth 3Y", "direction": "higher", "good_range": ">7%",
-        "desc": "Compound annual growth rate of dividends over the past 3 years.",
-        "calc": "CAGR of dividend per share over 3 years.",
-        "detail": "Positive and consistent growth is very attractive for income investors. >7% = strong. >10% = excellent. Declining or inconsistent dividends are red flags.",
-    },
-    "dividend_gr_5y": {
-        "name": "Div Growth 5Y", "direction": "higher", "good_range": ">7%",
-        "desc": "Compound annual growth rate of dividends over the past 5 years.",
-        "calc": "CAGR of dividend per share over 5 years.",
-        "detail": "Longer track record than 3Y. Consistent growth over 5 years is a strong quality signal for income stocks.",
-    },
-    "perf_week": {
-        "name": "Perf Week", "direction": "higher", "good_range": "Compare to benchmark",
-        "desc": "Total price return over the past week.",
-        "calc": "(Current Price - Price 1 Week Ago) / Price 1 Week Ago x 100%.",
-        "detail": "Compare to S&P 500 over the same period. Short-term metric subject to noise.",
-    },
-    "perf_month": {
-        "name": "Perf Month", "direction": "higher", "good_range": "Compare to benchmark",
-        "desc": "Total price return over the past month.",
-        "calc": "(Current Price - Price 1 Month Ago) / Price 1 Month Ago x 100%.",
-        "detail": "Compare to benchmark. Strong short-term performance with weak long-term could indicate a bounce in a declining stock.",
-    },
-    "perf_quarter": {
-        "name": "Perf Quarter", "direction": "higher", "good_range": "Compare to benchmark",
-        "desc": "Total price return over the past quarter.",
-        "calc": "(Current Price - Price 3 Months Ago) / Price 3 Months Ago x 100%.",
-        "detail": "Compare to S&P 500 and sector performance. Outperforming = stock doing relatively well.",
-    },
-    "perf_half_y": {
-        "name": "Perf Half Y", "direction": "higher", "good_range": "Compare to benchmark",
-        "desc": "Total price return over the past 6 months.",
-        "calc": "(Current Price - Price 6 Months Ago) / Price 6 Months Ago x 100%.",
-        "detail": "Medium-term performance. Compare to benchmark and peers.",
-    },
-    "perf_year": {
-        "name": "Perf Year", "direction": "higher", "good_range": "Compare to benchmark",
-        "desc": "Total price return over the past year.",
-        "calc": "(Current Price - Price 1 Year Ago) / Price 1 Year Ago x 100%.",
-        "detail": "Important benchmark. Strong long-term performance with weak short-term may signal a buying opportunity if fundamentals are intact.",
-    },
-    "perf_ytd": {
-        "name": "Perf YTD", "direction": "higher", "good_range": "Compare to benchmark",
-        "desc": "Total price return year-to-date.",
-        "calc": "(Current Price - Price at Year Start) / Price at Year Start x 100%.",
-        "detail": "How the stock has performed this calendar year. Compare to S&P 500 YTD return.",
-    },
-    "perf_3y": {
-        "name": "Perf 3Y", "direction": "higher", "good_range": "Compare to benchmark",
-        "desc": "Total price return over the past 3 years.",
-        "calc": "(Current Price - Price 3 Years Ago) / Price 3 Years Ago x 100%.",
-        "detail": "Long-term track record. Compare to index total return over same period.",
-    },
-    "perf_5y": {
-        "name": "Perf 5Y", "direction": "higher", "good_range": "Compare to benchmark",
-        "desc": "Total price return over the past 5 years.",
-        "calc": "(Current Price - Price 5 Years Ago) / Price 5 Years Ago x 100%.",
-        "detail": "Long-term track record. Useful for evaluating management quality and business durability.",
-    },
-    "perf_10y": {
-        "name": "Perf 10Y", "direction": "higher", "good_range": "Compare to benchmark",
-        "desc": "Total price return over the past 10 years.",
-        "calc": "(Current Price - Price 10 Years Ago) / Price 10 Years Ago x 100%.",
-        "detail": "The longest track record available. Compounders that have done well over 10 years often have strong fundamentals.",
-    },
-    "employees": {
-        "name": "Employees", "direction": "neutral", "good_range": "Context-dependent",
-        "desc": "Total number of employees at the company.",
-        "calc": "Reported by the company in 10-K filings.",
-        "detail": "Revenue per employee is a better metric. High-margin tech companies may have few employees relative to revenue. Compare within the same industry.",
-    },
-    "ipo_date": {
-        "name": "IPO Date", "direction": "neutral", "good_range": "Older = longer track record",
-        "desc": "Date the company first went public on a stock exchange.",
-        "calc": "Historical record.",
-        "detail": "Newer IPOs (<2 years) tend to be more volatile and may lack earnings history. Mature public companies have longer track records for analysis.",
-    },
-    "earnings_date": {
-        "name": "Earnings Date", "direction": "neutral", "good_range": "Informational",
-        "desc": "The next scheduled earnings report date.",
-        "calc": "Announced by the company.",
-        "detail": "Important for anticipating volatility. Stocks often move significantly around earnings. BMO = Before Market Open. AMC = After Market Close.",
-    },
-    "option_short": {
-        "name": "Option/Short", "direction": "neutral", "good_range": "Informational",
-        "desc": "Whether options are available and the stock can be shorted.",
-        "calc": "Determined by exchange and broker availability.",
-        "detail": "Yes/Yes = full trading flexibility. Options availability enables hedging strategies.",
+        "desc": "1=Strong Buy, 2=Buy, 3=Hold, 4=Sell, 5=Strong Sell.",
     },
 }
 
