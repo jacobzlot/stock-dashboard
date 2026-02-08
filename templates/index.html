@@ -93,6 +93,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 .metric-row .neutral { color: var(--text-muted); }
 
 /* ── Metric Tooltip ───────── */
+.ag-header-cell-text { cursor: default; }
+.ag-header-cell[col-id] .ag-header-cell-text { cursor: help; }
 .metric-tooltip { display: none; position: fixed; z-index: 2000; width: 340px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.45); pointer-events: none; }
 .metric-tooltip.visible { display: block; }
 .metric-tooltip .tt-name { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
@@ -112,6 +114,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 .shortlist-tracking .sl-row { display: flex; justify-content: space-between; padding: 2px 0; }
 .shortlist-tracking .sl-label { color: var(--text-muted); }
 .shortlist-tracking .sl-value { font-weight: 500; }
+.shortlist-tracking .sl-value.positive { color: var(--green); }
+.shortlist-tracking .sl-value.negative { color: var(--red); }
 .peer-table { width: 100%; font-size: 12px; border-collapse: collapse; }
 .peer-table th { text-align: left; color: var(--text-muted); padding: 4px 6px; border-bottom: 1px solid var(--border); font-weight: 500; }
 .peer-table td { padding: 4px 6px; border-bottom: 1px solid var(--bg-tertiary); }
@@ -360,7 +364,7 @@ async function toggleShortlist(ticker, price) {
 }
 
 // ── Build AG Grid ─────────────────────────────────────────
-function buildColumnDefs(visibleCols) {
+function buildColumnDefs(visibleCols, shortlistMode) {
   const cm = meta.column_meta || {};
   const allCols = Object.keys(cm);
   const show = visibleCols ? new Set(visibleCols) : null;
@@ -400,12 +404,19 @@ function buildColumnDefs(visibleCols) {
       width: col === 'company_name' ? 200 : col === 'ticker' ? 80 : 110,
     };
 
+    // Pin company_name and ticker always
     if (col === 'ticker') {
       def.pinned = 'left';
       def.cellRenderer = (p) => `<span style="color:var(--accent);font-weight:600;cursor:pointer;">${p.value}</span>`;
       def.onCellClicked = (p) => openDetail(p.value);
     } else if (col === 'company_name') {
       def.pinned = 'left';
+    }
+    // In shortlist mode, also pin price
+    if (shortlistMode && col === 'price') {
+      def.pinned = 'left';
+      def.headerName = 'Live Price';
+      def.hide = false;
     }
 
     // Format and color
@@ -431,14 +442,56 @@ function buildColumnDefs(visibleCols) {
 
     defs.push(def);
   }
+
+  // Shortlist-mode extra pinned columns: Added Price, Gain Since Added
+  if (shortlistMode) {
+    // Insert after the price column (find its index)
+    const priceIdx = defs.findIndex(d => d.field === 'price');
+    const insertAt = priceIdx >= 0 ? priceIdx + 1 : defs.length;
+
+    const extraCols = [
+      {
+        headerName: 'Added Price',
+        field: '_added_price',
+        width: 110,
+        pinned: 'left',
+        sortable: true,
+        filter: true,
+        resizable: true,
+        valueFormatter: (p) => fmtVal(p.value, 'dollar'),
+        comparator: (a,b) => (a??-Infinity) - (b??-Infinity),
+      },
+      {
+        headerName: 'Since Added',
+        field: '_gain_since_added_pct',
+        width: 120,
+        pinned: 'left',
+        sortable: true,
+        filter: true,
+        resizable: true,
+        valueFormatter: (p) => {
+          if (p.value == null) return '—';
+          const sign = p.value >= 0 ? '+' : '';
+          return sign + p.value.toFixed(2) + '%';
+        },
+        cellStyle: (p) => {
+          if (p.value == null) return {color:'var(--text-muted)'};
+          return p.value >= 0 ? {color:'var(--green)', fontWeight: 600} : {color:'var(--red)', fontWeight: 600};
+        },
+        comparator: (a,b) => (a??-Infinity) - (b??-Infinity),
+      },
+    ];
+    defs.splice(insertAt, 0, ...extraCols);
+  }
+
   return defs;
 }
 
-function initGrid(data, visibleCols) {
+function initGrid(data, visibleCols, shortlistMode) {
   const el = document.getElementById('grid');
   if (gridApi) { gridApi.destroy(); }
   const gridOptions = {
-    columnDefs: buildColumnDefs(visibleCols),
+    columnDefs: buildColumnDefs(visibleCols, shortlistMode),
     rowData: data,
     defaultColDef: { sortable: true, resizable: true, filter: true },
     animateRows: true,
@@ -456,6 +509,30 @@ function initGrid(data, visibleCols) {
     },
   };
   agGrid.createGrid(el, gridOptions);
+
+  // ── Header tooltip delegation ──
+  // AG Grid re-renders headers; use capture-phase mouseover on the grid container
+  el.removeEventListener('mouseover', _headerTipOver, true);
+  el.removeEventListener('mouseout', _headerTipOut, true);
+  el.addEventListener('mouseover', _headerTipOver, true);
+  el.addEventListener('mouseout', _headerTipOut, true);
+}
+
+// Header tooltip delegation handlers (persistent)
+function _headerTipOver(e) {
+  const textEl = e.target.closest('.ag-header-cell-text');
+  if (!textEl) return;
+  const headerCell = textEl.closest('.ag-header-cell');
+  if (!headerCell) return;
+  const colId = headerCell.getAttribute('col-id');
+  if (colId && metricsGuide[colId]) {
+    showMetricTip({target: textEl}, colId);
+  }
+}
+
+function _headerTipOut(e) {
+  const textEl = e.target.closest('.ag-header-cell-text');
+  if (textEl) hideMetricTip();
 }
 
 function updateGridColumns(visibleCols) {
@@ -479,6 +556,8 @@ function updateGridData(data) {
 }
 
 // ── Filters ───────────────────────────────────────────────
+let _lastShortlistMode = false;
+
 async function applyFilters() {
   const params = {};
   const industry = document.getElementById('filter-industry').value;
@@ -495,8 +574,28 @@ async function applyFilters() {
   if (shortlistFilterActive) params.shortlist_only = 'true';
   await fetchStocks(params);
   // Re-tag shortlist
-  allStocks.forEach(s => s._shortlisted = shortlist.has(s.ticker));
-  updateGridData(allStocks);
+  allStocks.forEach(s => {
+    s._shortlisted = shortlist.has(s.ticker);
+    // Inject shortlist tracking data
+    if (shortlistFilterActive && shortlistDetailed[s.ticker]) {
+      const sl = shortlistDetailed[s.ticker];
+      s._added_price = sl.added_price;
+      if (sl.added_price != null && s.price != null) {
+        s._gain_since_added_pct = ((s.price - sl.added_price) / sl.added_price) * 100;
+      } else {
+        s._gain_since_added_pct = null;
+      }
+    }
+  });
+
+  // If shortlist mode changed, rebuild grid (columns changed); otherwise just update data
+  if (shortlistFilterActive !== _lastShortlistMode) {
+    _lastShortlistMode = shortlistFilterActive;
+    const preset = customVisibleCols || VIEW_PRESETS[currentView];
+    initGrid(allStocks, preset, shortlistFilterActive);
+  } else {
+    updateGridData(allStocks);
+  }
 }
 
 // ── Search ────────────────────────────────────────────────
@@ -514,7 +613,12 @@ function switchView(view) {
   customVisibleCols = null;
   document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
   const preset = VIEW_PRESETS[view];
-  updateGridColumns(preset);
+  if (shortlistFilterActive) {
+    // Rebuild grid to get shortlist pinned columns with new view preset
+    initGrid(allStocks, preset, true);
+  } else {
+    updateGridColumns(preset);
+  }
 }
 
 // ── Column Picker ─────────────────────────────────────────
