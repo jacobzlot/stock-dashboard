@@ -1,0 +1,10 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+.env
+venv/
+README.md
+stock_data_latest.json
+affiliates_skipped.txt

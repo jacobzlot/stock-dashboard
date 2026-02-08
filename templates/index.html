@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stock Analysis Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@32.0.2/dist/ag-grid-community.min.js"></script>
+<style>
+:root {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+  --bg-hover: #30363d;
+  --border: #30363d;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --accent: #58a6ff;
+  --accent-hover: #79c0ff;
+  --green: #3fb950;
+  --red: #f85149;
+  --yellow: #d29922;
+  --orange: #db6d28;
+  --star: #e3b341;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg-primary); color: var(--text-primary); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Header ─────────────────── */
+.header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+.header h1 { font-size: 18px; font-weight: 600; white-space: nowrap; }
+.header h1 span { color: var(--accent); }
+.header-stats { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); }
+.header-stats .stat { display: flex; align-items: center; gap: 4px; }
+.header-stats .stat b { color: var(--text-primary); }
+
+/* ── Toolbar ────────────────── */
+.toolbar { background: var(--bg-secondary); border-bottom: 1px solid var(--border); padding: 8px 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex-shrink: 0; }
+.toolbar select, .toolbar input, .toolbar button { font-size: 13px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; outline: none; }
+.toolbar select:hover, .toolbar input:hover { border-color: var(--text-muted); }
+.toolbar select:focus, .toolbar input:focus { border-color: var(--accent); }
+.toolbar button { cursor: pointer; padding: 5px 14px; transition: all 0.15s; }
+.toolbar button:hover { background: var(--bg-hover); border-color: var(--text-muted); }
+.toolbar button.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+.toolbar button.btn-star { background: transparent; border-color: var(--star); color: var(--star); }
+.toolbar button.btn-star.active { background: var(--star); color: #000; }
+.toolbar .sep { width: 1px; height: 24px; background: var(--border); }
+.toolbar label { font-size: 12px; color: var(--text-secondary); }
+.toolbar .search-box { width: 200px; }
+.badge { background: var(--accent); color: #000; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 10px; margin-left: 4px; }
+
+/* ── View Tabs ──────────────── */
+.view-tabs { display: flex; gap: 2px; }
+.view-tab { font-size: 12px; padding: 4px 12px; border-radius: 6px; cursor: pointer; background: transparent; border: 1px solid transparent; color: var(--text-secondary); }
+.view-tab:hover { color: var(--text-primary); background: var(--bg-hover); }
+.view-tab.active { background: var(--bg-tertiary); color: var(--accent); border-color: var(--border); }
+
+/* ── Column Picker Panel ────── */
+.column-picker-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; }
+.column-picker-overlay.open { display: flex; align-items: flex-start; justify-content: center; padding-top: 80px; }
+.column-picker { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; width: 700px; max-height: 70vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(0,0,0,0.4); }
+.column-picker h3 { margin-bottom: 16px; font-size: 16px; }
+.column-picker .group { margin-bottom: 16px; }
+.column-picker .group-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; cursor: pointer; }
+.column-picker .group-header h4 { font-size: 13px; color: var(--accent); }
+.column-picker .group-header .toggle-all { font-size: 11px; color: var(--text-muted); cursor: pointer; }
+.column-picker .group-header .toggle-all:hover { color: var(--accent); }
+.column-picker .cols-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.column-picker label.col-item { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 6px; border-radius: 4px; cursor: pointer; color: var(--text-secondary); }
+.column-picker label.col-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.column-picker label.col-item input { accent-color: var(--accent); }
+.column-picker .actions { display: flex; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.column-picker .actions button { padding: 6px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary); }
+.column-picker .actions button.primary { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+
+/* ── Detail Panel ───────────── */
+.detail-overlay { display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 540px; background: var(--bg-secondary); border-left: 1px solid var(--border); z-index: 999; overflow-y: auto; box-shadow: -4px 0 24px rgba(0,0,0,0.3); }
+.detail-overlay.open { display: block; }
+.detail-header { position: sticky; top: 0; background: var(--bg-secondary); padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; z-index: 1; }
+.detail-header h2 { font-size: 18px; }
+.detail-header .close-btn { cursor: pointer; color: var(--text-secondary); font-size: 20px; padding: 4px 8px; border-radius: 4px; }
+.detail-header .close-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.detail-body { padding: 16px 20px; }
+.detail-section { margin-bottom: 20px; }
+.detail-section h3 { font-size: 14px; color: var(--accent); margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.metric-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; border-bottom: 1px solid var(--bg-tertiary); }
+.metric-row .label { color: var(--text-secondary); }
+.metric-row .value { font-weight: 500; }
+.metric-row .vs-industry { font-size: 11px; margin-left: 8px; }
+.metric-row .better { color: var(--green); }
+.metric-row .worse { color: var(--red); }
+.metric-row .neutral { color: var(--text-muted); }
+.detail-shortlist-btn { width: 100%; padding: 8px; border-radius: 6px; font-size: 14px; cursor: pointer; margin-top: 8px; border: 2px solid var(--star); background: transparent; color: var(--star); font-weight: 600; }
+.detail-shortlist-btn.active { background: var(--star); color: #000; }
+.peer-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.peer-table th { text-align: left; color: var(--text-muted); padding: 4px 6px; border-bottom: 1px solid var(--border); font-weight: 500; }
+.peer-table td { padding: 4px 6px; border-bottom: 1px solid var(--bg-tertiary); }
+.peer-table tr:hover { background: var(--bg-hover); }
+
+/* ── Metrics Guide Panel ────── */
+.guide-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; }
+.guide-overlay.open { display: flex; align-items: flex-start; justify-content: center; padding-top: 60px; }
+.guide-panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; width: 800px; max-height: 80vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(0,0,0,0.4); }
+.guide-panel .guide-header { position: sticky; top: 0; background: var(--bg-secondary); padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; z-index: 1; }
+.guide-panel .guide-body { padding: 16px 20px; }
+.guide-metric { margin-bottom: 14px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; }
+.guide-metric h4 { font-size: 14px; margin-bottom: 4px; }
+.guide-metric p { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; }
+.guide-metric .guide-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+.guide-metric .tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+.guide-metric .tag.dir-lower { background: rgba(88,166,255,0.15); color: var(--accent); }
+.guide-metric .tag.dir-higher { background: rgba(63,185,80,0.15); color: var(--green); }
+.guide-metric .tag.dir-neutral { background: rgba(139,148,158,0.15); color: var(--text-secondary); }
+.guide-metric .tag.range { background: rgba(210,153,34,0.15); color: var(--yellow); }
+
+/* ── AG Grid Theme Override ─── */
+.ag-theme-alpine-dark {
+  --ag-background-color: var(--bg-primary);
+  --ag-header-background-color: var(--bg-secondary);
+  --ag-odd-row-background-color: var(--bg-primary);
+  --ag-row-hover-color: var(--bg-hover);
+  --ag-selected-row-background-color: rgba(88,166,255,0.1);
+  --ag-border-color: var(--border);
+  --ag-header-foreground-color: var(--text-secondary);
+  --ag-foreground-color: var(--text-primary);
+  --ag-font-size: 13px;
+  --ag-row-height: 34px;
+  --ag-header-height: 36px;
+  flex: 1;
+}
+.ag-theme-alpine-dark .ag-header-cell-label { font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
+
+/* Shortlist star in grid */
+.star-cell { cursor: pointer; text-align: center; font-size: 16px; }
+.star-cell:hover { transform: scale(1.2); }
+.positive { color: var(--green); }
+.negative { color: var(--red); }
+.muted { color: var(--text-muted); }
+
+/* ── Toast ──────────────────── */
+.toast { position: fixed; bottom: 20px; right: 20px; background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary); padding: 10px 20px; border-radius: 8px; font-size: 13px; z-index: 2000; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📊 <span>Stock</span> Dashboard</h1>
+  <div class="header-stats">
+    <div class="stat">Stocks: <b id="stat-total">—</b></div>
+    <div class="stat">Showing: <b id="stat-showing">—</b></div>
+    <div class="stat">Shortlisted: <b id="stat-shortlist">0</b></div>
+    <div class="stat" style="color:var(--text-muted);" id="stat-updated"></div>
+  </div>
+</div>
+
+<div class="toolbar">
+  <input type="text" class="search-box" id="search" placeholder="🔍 Search ticker or name…">
+  <div class="sep"></div>
+  <label>Industry</label>
+  <select id="filter-industry"><option value="">All Industries</option></select>
+  <div class="sep"></div>
+  <label>Cap</label>
+  <select id="filter-cap">
+    <option value="">All</option>
+    <option value="200000000000">Mega (>200B)</option>
+    <option value="10000000000-200000000000">Large (10B–200B)</option>
+    <option value="2000000000-10000000000">Mid (2B–10B)</option>
+    <option value="300000000-2000000000">Small (300M–2B)</option>
+    <option value="0-300000000">Micro (<300M)</option>
+  </select>
+  <div class="sep"></div>
+  <div class="view-tabs">
+    <div class="view-tab active" data-view="overview">Overview</div>
+    <div class="view-tab" data-view="valuation">Valuation</div>
+    <div class="view-tab" data-view="profitability">Profitability</div>
+    <div class="view-tab" data-view="growth">Growth</div>
+    <div class="view-tab" data-view="health">Health</div>
+    <div class="view-tab" data-view="technical">Technical</div>
+    <div class="view-tab" data-view="all">All Columns</div>
+  </div>
+  <div class="sep"></div>
+  <button id="btn-columns" title="Customize columns">⚙ Columns</button>
+  <button id="btn-guide" title="Metrics reference guide">📖 Guide</button>
+  <button id="btn-shortlist" class="btn-star" title="Show shortlist only">★ Shortlist</button>
+  <button id="btn-export" title="Export to CSV">⬇ Export</button>
+</div>
+
+<div id="grid" class="ag-theme-alpine-dark"></div>
+
+<!-- Column Picker -->
+<div class="column-picker-overlay" id="col-picker-overlay">
+  <div class="column-picker" id="col-picker">
+    <h3>Customize Columns</h3>
+    <div id="col-picker-groups"></div>
+    <div class="actions">
+      <button class="primary" id="col-picker-apply">Apply</button>
+      <button id="col-picker-cancel">Cancel</button>
+      <button id="col-picker-reset" style="margin-left:auto;">Reset to View Default</button>
+    </div>
+  </div>
+</div>
+
+<!-- Detail Panel -->
+<div class="detail-overlay" id="detail-panel">
+  <div class="detail-header">
+    <h2 id="detail-title">—</h2>
+    <span class="close-btn" id="detail-close">✕</span>
+  </div>
+  <div class="detail-body" id="detail-body"></div>
+</div>
+
+<!-- Metrics Guide -->
+<div class="guide-overlay" id="guide-overlay">
+  <div class="guide-panel">
+    <div class="guide-header">
+      <h3>📖 Financial Metrics Reference</h3>
+      <span class="close-btn" id="guide-close" style="cursor:pointer;">✕</span>
+    </div>
+    <div class="guide-body" id="guide-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────
+let allStocks = [];
+let meta = {};
+let gridApi = null;
+let shortlist = new Set();
+let currentView = 'overview';
+let customVisibleCols = null; // null = use view preset
+let shortlistFilterActive = false;
+
+// ── View Presets ──────────────────────────────────────────
+const VIEW_PRESETS = {
+  overview: ['ticker','company_name','industry','price','market_cap','pe_ratio','ps_ratio','profit_margin','roe','revenue_growth_ttm','rsi','debt_to_equity','recommendation','target_price'],
+  valuation: ['ticker','company_name','industry','price','market_cap','pe_ratio','forward_pe','peg_ratio','ps_ratio','pb_ratio','pc_ratio','pfcf_ratio','ev_sales','ev_ebitda'],
+  profitability: ['ticker','company_name','industry','price','market_cap','eps_ttm','income','sales','profit_margin','operating_margin','gross_margin','roa','roe','roi','roic'],
+  growth: ['ticker','company_name','industry','price','market_cap','revenue_growth_ttm','eps_growth_ttm','eps_growth_next_y','eps_growth_next_5y','eps_past_3y','eps_past_5y','sales_past_3y','sales_past_5y','eps_surprise','sales_surprise'],
+  health: ['ticker','company_name','industry','price','market_cap','debt_to_equity','lt_debt_to_equity','current_ratio','quick_ratio','cash_per_share','book_per_share','short_float','short_ratio','insider_own','inst_own'],
+  technical: ['ticker','company_name','industry','price','rsi','beta','atr','volatility_week','volatility_month','sma20','sma50','sma200','week_52_high','week_52_high_pct','week_52_low','week_52_low_pct','rel_volume'],
+  all: null, // show everything
+};
+
+// ── Format helpers ────────────────────────────────────────
+function fmtVal(value, fmt) {
+  if (value === null || value === undefined || value === '') return '—';
+  const n = Number(value);
+  if (isNaN(n) && fmt !== 'text') return value;
+  switch(fmt) {
+    case 'dollar': return '$' + n.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+    case 'pct': return (n * 100).toFixed(2) + '%';
+    case 'num2': return n.toFixed(2);
+    case 'num1': return n.toFixed(1);
+    case 'bignum':
+      if (Math.abs(n) >= 1e12) return (n/1e12).toFixed(2) + 'T';
+      if (Math.abs(n) >= 1e9) return (n/1e9).toFixed(2) + 'B';
+      if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(2) + 'M';
+      if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(1) + 'K';
+      return n.toLocaleString();
+    default: return String(value);
+  }
+}
+
+function colorClass(value) {
+  if (value === null || value === undefined) return 'muted';
+  const n = Number(value);
+  if (isNaN(n)) return '';
+  return n > 0 ? 'positive' : n < 0 ? 'negative' : 'muted';
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ── API calls ─────────────────────────────────────────────
+async function fetchMeta() {
+  const r = await fetch('/api/meta');
+  meta = await r.json();
+  return meta;
+}
+
+async function fetchStocks(params = {}) {
+  const q = new URLSearchParams(params).toString();
+  const r = await fetch('/api/stocks' + (q ? '?' + q : ''));
+  allStocks = await r.json();
+  return allStocks;
+}
+
+async function fetchDetail(ticker) {
+  const r = await fetch('/api/stock/' + ticker);
+  return r.json();
+}
+
+async function toggleShortlist(ticker) {
+  const r = await fetch('/api/shortlist', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ticker, action:'toggle'})
+  });
+  const data = await r.json();
+  shortlist = new Set(data.shortlist);
+  document.getElementById('stat-shortlist').textContent = shortlist.size;
+  return data.shortlisted;
+}
+
+// ── Build AG Grid ─────────────────────────────────────────
+function buildColumnDefs(visibleCols) {
+  const cm = meta.column_meta || {};
+  const allCols = Object.keys(cm);
+  const show = visibleCols ? new Set(visibleCols) : null;
+
+  const defs = [];
+
+  // Star column (always first)
+  defs.push({
+    headerName: '★',
+    field: '_shortlisted',
+    width: 50,
+    pinned: 'left',
+    sortable: true,
+    filter: false,
+    cellRenderer: (p) => {
+      return `<span class="star-cell" style="color:${p.value ? 'var(--star)' : 'var(--text-muted)'}">${p.value ? '★' : '☆'}</span>`;
+    },
+    onCellClicked: async (p) => {
+      const nowStarred = await toggleShortlist(p.data.ticker);
+      p.data._shortlisted = nowStarred;
+      p.api.refreshCells({rowNodes: [p.node], columns: ['_shortlisted']});
+      toast(nowStarred ? `★ ${p.data.ticker} added to shortlist` : `☆ ${p.data.ticker} removed`);
+    },
+  });
+
+  for (const col of allCols) {
+    const m = cm[col];
+    if (!m) continue;
+    const visible = show === null || show.has(col);
+    const def = {
+      headerName: m.label,
+      field: col,
+      hide: !visible,
+      sortable: true,
+      filter: true,
+      resizable: true,
+      width: col === 'company_name' ? 200 : col === 'ticker' ? 80 : 110,
+    };
+
+    if (col === 'ticker') {
+      def.pinned = 'left';
+      def.cellRenderer = (p) => `<span style="color:var(--accent);font-weight:600;cursor:pointer;">${p.value}</span>`;
+      def.onCellClicked = (p) => openDetail(p.value);
+    } else if (col === 'company_name') {
+      def.pinned = 'left';
+    }
+
+    // Format and color
+    if (m.fmt === 'pct') {
+      def.valueFormatter = (p) => fmtVal(p.value, 'pct');
+      def.cellStyle = (p) => {
+        const c = colorClass(p.value);
+        if (c === 'positive') return {color:'var(--green)'};
+        if (c === 'negative') return {color:'var(--red)'};
+        return {color:'var(--text-muted)'};
+      };
+      def.comparator = (a,b) => (a??-Infinity) - (b??-Infinity);
+    } else if (m.fmt === 'dollar') {
+      def.valueFormatter = (p) => fmtVal(p.value, 'dollar');
+      def.comparator = (a,b) => (a??-Infinity) - (b??-Infinity);
+    } else if (m.fmt === 'bignum') {
+      def.valueFormatter = (p) => fmtVal(p.value, 'bignum');
+      def.comparator = (a,b) => (a??-Infinity) - (b??-Infinity);
+    } else if (m.fmt === 'num2' || m.fmt === 'num1') {
+      def.valueFormatter = (p) => fmtVal(p.value, m.fmt);
+      def.comparator = (a,b) => (a??-Infinity) - (b??-Infinity);
+    }
+
+    defs.push(def);
+  }
+  return defs;
+}
+
+function initGrid(data, visibleCols) {
+  const el = document.getElementById('grid');
+  if (gridApi) { gridApi.destroy(); }
+  const gridOptions = {
+    columnDefs: buildColumnDefs(visibleCols),
+    rowData: data,
+    defaultColDef: { sortable: true, resizable: true, filter: true },
+    animateRows: true,
+    rowSelection: 'single',
+    suppressRowClickSelection: true,
+    enableCellTextSelection: true,
+    getRowId: (p) => p.data.ticker,
+    onGridReady: (p) => {
+      gridApi = p.api;
+      document.getElementById('stat-showing').textContent = data.length;
+    },
+    onFilterChanged: () => {
+      const count = gridApi.getDisplayedRowCount();
+      document.getElementById('stat-showing').textContent = count;
+    },
+  };
+  agGrid.createGrid(el, gridOptions);
+}
+
+function updateGridColumns(visibleCols) {
+  if (!gridApi) return;
+  const cm = meta.column_meta || {};
+  const show = visibleCols ? new Set(visibleCols) : null;
+  const allCols = gridApi.getColumns();
+  if (!allCols) return;
+  const colState = allCols.map(c => {
+    const id = c.getColId();
+    if (id === '_shortlisted') return null;
+    return { colId: id, hide: show !== null && !show.has(id) };
+  }).filter(Boolean);
+  gridApi.applyColumnState({ state: colState });
+}
+
+function updateGridData(data) {
+  if (!gridApi) return;
+  gridApi.setGridOption('rowData', data);
+  document.getElementById('stat-showing').textContent = data.length;
+}
+
+// ── Filters ───────────────────────────────────────────────
+async function applyFilters() {
+  const params = {};
+  const industry = document.getElementById('filter-industry').value;
+  if (industry) params.industry = industry;
+  const capVal = document.getElementById('filter-cap').value;
+  if (capVal) {
+    if (capVal.includes('-')) {
+      const [min, max] = capVal.split('-');
+      params.min_cap = min; params.max_cap = max;
+    } else {
+      params.min_cap = capVal;
+    }
+  }
+  if (shortlistFilterActive) params.shortlist_only = 'true';
+  await fetchStocks(params);
+  // Re-tag shortlist
+  allStocks.forEach(s => s._shortlisted = shortlist.has(s.ticker));
+  updateGridData(allStocks);
+}
+
+// ── Search ────────────────────────────────────────────────
+function applySearch(text) {
+  if (!gridApi) return;
+  gridApi.setGridOption('quickFilterText', text);
+  setTimeout(() => {
+    document.getElementById('stat-showing').textContent = gridApi.getDisplayedRowCount();
+  }, 100);
+}
+
+// ── Views ─────────────────────────────────────────────────
+function switchView(view) {
+  currentView = view;
+  customVisibleCols = null;
+  document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+  const preset = VIEW_PRESETS[view];
+  updateGridColumns(preset);
+}
+
+// ── Column Picker ─────────────────────────────────────────
+function openColumnPicker() {
+  const groups = meta.column_groups;
+  const cm = meta.column_meta;
+  const container = document.getElementById('col-picker-groups');
+  container.innerHTML = '';
+
+  // Get currently visible columns
+  const currentlyVisible = new Set();
+  if (gridApi) {
+    gridApi.getColumns().forEach(c => {
+      if (!c.isVisible()) return;
+      if (c.getColId() === '_shortlisted') return;
+      currentlyVisible.add(c.getColId());
+    });
+  }
+
+  for (const [gid, group] of Object.entries(groups)) {
+    const div = document.createElement('div');
+    div.className = 'group';
+    div.innerHTML = `<div class="group-header"><h4>${group.label}</h4><span class="toggle-all" data-group="${gid}">toggle all</span></div><div class="cols-grid"></div>`;
+    const grid = div.querySelector('.cols-grid');
+    for (const col of group.columns) {
+      const m = cm[col];
+      if (!m) continue;
+      const checked = currentlyVisible.has(col) ? 'checked' : '';
+      grid.innerHTML += `<label class="col-item"><input type="checkbox" value="${col}" ${checked}>${m.label}</label>`;
+    }
+    // Toggle all handler
+    div.querySelector('.toggle-all').addEventListener('click', () => {
+      const cbs = div.querySelectorAll('input[type=checkbox]');
+      const allChecked = [...cbs].every(cb => cb.checked);
+      cbs.forEach(cb => cb.checked = !allChecked);
+    });
+    container.appendChild(div);
+  }
+
+  document.getElementById('col-picker-overlay').classList.add('open');
+}
+
+function closeColumnPicker() {
+  document.getElementById('col-picker-overlay').classList.remove('open');
+}
+
+function applyColumnPicker() {
+  const cbs = document.querySelectorAll('#col-picker-groups input[type=checkbox]:checked');
+  const cols = [...cbs].map(cb => cb.value);
+  customVisibleCols = cols;
+  updateGridColumns(cols);
+  closeColumnPicker();
+  // Deactivate view tabs since it's custom
+  document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
+}
+
+// ── Detail Panel ──────────────────────────────────────────
+async function openDetail(ticker) {
+  const panel = document.getElementById('detail-panel');
+  const body = document.getElementById('detail-body');
+  const title = document.getElementById('detail-title');
+  title.textContent = ticker + ' — Loading…';
+  body.innerHTML = '';
+  panel.classList.add('open');
+
+  const data = await fetchDetail(ticker);
+  const cm = meta.column_meta || {};
+  const guide = {};
+  try {
+    const gr = await fetch('/api/metrics_guide');
+    Object.assign(guide, await gr.json());
+  } catch(e) {}
+
+  title.textContent = `${data.ticker} — ${data.company_name || ''}`;
+
+  let html = '';
+
+  // Shortlist button
+  html += `<button class="detail-shortlist-btn ${shortlist.has(ticker)?'active':''}" onclick="detailToggleStar('${ticker}', this)">${shortlist.has(ticker) ? '★ On Shortlist' : '☆ Add to Shortlist'}</button>`;
+
+  // Key info
+  html += `<div class="detail-section"><h3>Overview</h3>`;
+  html += metricRow('Industry', data.industry || '—');
+  html += metricRow('Sector', data.sector || '—');
+  html += metricRow('Price', fmtVal(data.price, 'dollar'));
+  html += metricRow('Market Cap', fmtVal(data.market_cap, 'bignum'));
+  html += metricRow('Employees', fmtVal(data.employees, 'bignum'));
+  html += metricRow('IPO Date', data.ipo_date || '—');
+  html += `</div>`;
+
+  // Valuation vs Industry
+  const avgs = data.industry_averages || {};
+  const sections = [
+    { title: 'Valuation', keys: ['pe_ratio','forward_pe','peg_ratio','ps_ratio','pb_ratio','pfcf_ratio','ev_ebitda'] },
+    { title: 'Profitability', keys: ['profit_margin','operating_margin','gross_margin','roa','roe','roic'] },
+    { title: 'Growth', keys: ['revenue_growth_ttm','eps_growth_ttm','eps_growth_next_y','eps_growth_next_5y'] },
+    { title: 'Financial Health', keys: ['debt_to_equity','current_ratio','quick_ratio','cash_per_share','book_per_share'] },
+    { title: 'Technical', keys: ['rsi','beta','sma20','sma50','sma200','short_float'] },
+    { title: 'Analyst', keys: ['target_price','recommendation'] },
+  ];
+
+  for (const sec of sections) {
+    html += `<div class="detail-section"><h3>${sec.title}</h3>`;
+    for (const key of sec.keys) {
+      const m = cm[key];
+      if (!m) continue;
+      const val = data[key];
+      const formatted = fmtVal(val, m.fmt);
+      const avgKey = 'avg_' + key.replace('_ratio','').replace('profit_margin','profit_margin').replace('operating_margin','oper_margin');
+
+      // Try to find industry average
+      let vsHtml = '';
+      const g = guide[key];
+      if (g) {
+        const dir = g.direction;
+        vsHtml += ` <span class="vs-industry neutral" title="${g.desc}">ℹ ${g.good_range}</span>`;
+      }
+
+      html += metricRow(m.label, `<span class="${colorClass(val)}">${formatted}</span>${vsHtml}`);
+    }
+    html += `</div>`;
+  }
+
+  // Peers
+  if (data.peers && data.peers.length > 0) {
+    html += `<div class="detail-section"><h3>Industry Peers (${data.industry})</h3>`;
+    html += `<table class="peer-table"><tr><th>Ticker</th><th>Company</th><th>Mkt Cap</th><th>P/E</th><th>Margin</th><th>ROE</th></tr>`;
+    for (const p of data.peers) {
+      html += `<tr>
+        <td><span style="color:var(--accent);cursor:pointer;" onclick="openDetail('${p.ticker}')">${p.ticker}</span></td>
+        <td>${(p.company_name||'').substring(0,25)}</td>
+        <td>${fmtVal(p.market_cap,'bignum')}</td>
+        <td>${fmtVal(p.pe_ratio,'num2')}</td>
+        <td class="${colorClass(p.profit_margin)}">${fmtVal(p.profit_margin,'pct')}</td>
+        <td class="${colorClass(p.roe)}">${fmtVal(p.roe,'pct')}</td>
+      </tr>`;
+    }
+    html += `</table></div>`;
+  }
+
+  body.innerHTML = html;
+}
+
+function metricRow(label, value) {
+  return `<div class="metric-row"><span class="label">${label}</span><span class="value">${value}</span></div>`;
+}
+
+async function detailToggleStar(ticker, btn) {
+  const starred = await toggleShortlist(ticker);
+  btn.classList.toggle('active', starred);
+  btn.textContent = starred ? '★ On Shortlist' : '☆ Add to Shortlist';
+  // Update grid row
+  if (gridApi) {
+    const node = gridApi.getRowNode(ticker);
+    if (node) {
+      node.setDataValue('_shortlisted', starred);
+    }
+  }
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.remove('open');
+}
+
+// ── Metrics Guide ─────────────────────────────────────────
+async function openGuide() {
+  const body = document.getElementById('guide-body');
+  let html = '';
+  try {
+    const r = await fetch('/api/metrics_guide');
+    const guide = await r.json();
+    for (const [key, g] of Object.entries(guide)) {
+      const dirClass = g.direction === 'lower' ? 'dir-lower' : g.direction === 'higher' ? 'dir-higher' : 'dir-neutral';
+      html += `<div class="guide-metric">
+        <h4>${g.name}</h4>
+        <p>${g.desc}</p>
+        <div class="guide-tags">
+          <span class="tag ${dirClass}">${g.direction === 'lower' ? '↓ Lower is better' : g.direction === 'higher' ? '↑ Higher is better' : '↔ Context-dependent'}</span>
+          <span class="tag range">Good: ${g.good_range}</span>
+        </div>
+      </div>`;
+    }
+  } catch(e) {
+    html = '<p>Could not load metrics guide.</p>';
+  }
+  body.innerHTML = html;
+  document.getElementById('guide-overlay').classList.add('open');
+}
+
+function closeGuide() {
+  document.getElementById('guide-overlay').classList.remove('open');
+}
+
+// ── Export ─────────────────────────────────────────────────
+function exportCSV() {
+  if (!gridApi) return;
+  gridApi.exportDataAsCsv({ fileName: 'stock_dashboard_export.csv' });
+  toast('CSV exported');
+}
+
+// ── Init ──────────────────────────────────────────────────
+async function init() {
+  await fetchMeta();
+  document.getElementById('stat-total').textContent = meta.total_stocks;
+
+  // Populate industry filter
+  const indSel = document.getElementById('filter-industry');
+  for (const ind of meta.industries || []) {
+    indSel.innerHTML += `<option value="${ind}">${ind}</option>`;
+  }
+
+  // Load shortlist
+  const slr = await fetch('/api/shortlist');
+  shortlist = new Set(await slr.json());
+  document.getElementById('stat-shortlist').textContent = shortlist.size;
+
+  // Load all stocks
+  await fetchStocks();
+  allStocks.forEach(s => s._shortlisted = shortlist.has(s.ticker));
+
+  // Init grid with overview preset
+  initGrid(allStocks, VIEW_PRESETS.overview);
+
+  // Event listeners
+  document.getElementById('search').addEventListener('input', (e) => applySearch(e.target.value));
+  document.getElementById('filter-industry').addEventListener('change', applyFilters);
+  document.getElementById('filter-cap').addEventListener('change', applyFilters);
+
+  document.querySelectorAll('.view-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchView(tab.dataset.view));
+  });
+
+  document.getElementById('btn-columns').addEventListener('click', openColumnPicker);
+  document.getElementById('col-picker-cancel').addEventListener('click', closeColumnPicker);
+  document.getElementById('col-picker-apply').addEventListener('click', applyColumnPicker);
+  document.getElementById('col-picker-reset').addEventListener('click', () => {
+    closeColumnPicker();
+    switchView(currentView);
+  });
+  document.getElementById('col-picker-overlay').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeColumnPicker();
+  });
+
+  document.getElementById('btn-guide').addEventListener('click', openGuide);
+  document.getElementById('guide-close').addEventListener('click', closeGuide);
+  document.getElementById('guide-overlay').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeGuide();
+  });
+
+  document.getElementById('detail-close').addEventListener('click', closeDetail);
+
+  document.getElementById('btn-shortlist').addEventListener('click', () => {
+    shortlistFilterActive = !shortlistFilterActive;
+    document.getElementById('btn-shortlist').classList.toggle('active', shortlistFilterActive);
+    applyFilters();
+  });
+
+  document.getElementById('btn-export').addEventListener('click', exportCSV);
+}
+
+init();
+</script>
+</body>
+</html>
