@@ -1,13 +1,21 @@
 """
-Stock Analysis Dashboard — Flask Backend
+Stock Analysis Dashboard -- Flask Backend
 Supports Postgres (Railway) and SQLite (local dev).
 """
 import os
 import json
 import sqlite3
+import logging
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request, g
 from flask_cors import CORS
+
+try:
+    import yfinance as yf
+    YF_AVAILABLE = True
+except ImportError:
+    YF_AVAILABLE = False
+    logging.warning("yfinance not installed. Live price data unavailable. pip install yfinance")
 
 app = Flask(__name__)
 CORS(app)
@@ -610,6 +618,21 @@ def api_stock_detail(ticker):
     shortlist_set = set(_load_shortlist())
     data["_shortlisted"] = ticker in shortlist_set
 
+    # Inject live price from yfinance (fall back to finviz-scraped price)
+    live = _get_live_quote(ticker)
+    if live:
+        data["live_price"] = live["price"]
+        data["live_change"] = live["change"]
+        data["live_change_pct"] = live["change_pct"]
+        data["live_prev_close"] = live["prev_close"]
+        data["price_source"] = "live"
+    else:
+        data["live_price"] = data.get("price")
+        data["live_change"] = None
+        data["live_change_pct"] = None
+        data["live_prev_close"] = data.get("prev_close")
+        data["price_source"] = "finviz"
+
     return jsonify(data)
 
 
@@ -700,6 +723,140 @@ def api_industry_stats():
             d[col] = val
         result.append(d)
     return jsonify(result)
+
+
+# ── Live Price & History (yfinance) ────────────────────────
+
+# Period config: maps frontend period keys to yfinance params
+# Each entry: (yf_period, yf_interval, label)
+PRICE_PERIODS = {
+    "1D":  {"period": "1d",  "interval": "5m"},
+    "1W":  {"period": "5d",  "interval": "15m"},
+    "1M":  {"period": "1mo", "interval": "1h"},
+    "3M":  {"period": "3mo", "interval": "1d"},
+    "1Y":  {"period": "1y",  "interval": "1d"},
+    "5Y":  {"period": "5y",  "interval": "1wk"},
+}
+
+
+def _get_live_quote(ticker_symbol):
+    """Fetch live price data from yfinance. Returns dict or None."""
+    if not YF_AVAILABLE:
+        return None
+    try:
+        tk = yf.Ticker(ticker_symbol)
+        info = tk.fast_info
+        current_price = getattr(info, 'last_price', None)
+        prev_close = getattr(info, 'previous_close', None)
+        if current_price is None:
+            return None
+        change = round(current_price - prev_close, 2) if prev_close else None
+        change_pct = round((change / prev_close) * 100, 2) if prev_close and change is not None else None
+        return {
+            "price": round(current_price, 2),
+            "prev_close": round(prev_close, 2) if prev_close else None,
+            "change": change,
+            "change_pct": change_pct,
+            "source": "live",
+        }
+    except Exception as e:
+        logging.warning(f"yfinance quote failed for {ticker_symbol}: {e}")
+        return None
+
+
+@app.route("/api/stock/<ticker>/price_history")
+def api_price_history(ticker):
+    """
+    Return historical price data for a ticker.
+    Query params:
+      - period: 1D, 1W, 1M, 3M, 1Y, 5Y (default 1M)
+    Response mimics Robinhood-style data: array of price points with
+    timestamp, open, high, low, close, volume, plus summary stats.
+    """
+    if not YF_AVAILABLE:
+        return jsonify({"error": "yfinance not installed on server"}), 503
+
+    period_key = request.args.get("period", "1M").upper()
+    if period_key not in PRICE_PERIODS:
+        return jsonify({"error": f"Invalid period. Use: {', '.join(PRICE_PERIODS.keys())}"}), 400
+
+    cfg = PRICE_PERIODS[period_key]
+
+    try:
+        tk = yf.Ticker(ticker)
+        hist = tk.history(period=cfg["period"], interval=cfg["interval"])
+
+        if hist.empty:
+            return jsonify({"error": f"No price data found for {ticker}"}), 404
+
+        prices = []
+        for idx, row in hist.iterrows():
+            ts = idx
+            # Convert timezone-aware timestamps to ISO strings
+            if hasattr(ts, 'isoformat'):
+                ts_str = ts.isoformat()
+            else:
+                ts_str = str(ts)
+
+            prices.append({
+                "timestamp": ts_str,
+                "open": round(float(row["Open"]), 2),
+                "high": round(float(row["High"]), 2),
+                "low": round(float(row["Low"]), 2),
+                "close": round(float(row["Close"]), 2),
+                "volume": int(row["Volume"]) if row["Volume"] else 0,
+            })
+
+        if not prices:
+            return jsonify({"error": "No data points"}), 404
+
+        # Summary stats
+        first_close = prices[0]["close"]
+        last_close = prices[-1]["close"]
+        change = round(last_close - first_close, 2)
+        change_pct = round((change / first_close) * 100, 2) if first_close else 0
+        high = max(p["high"] for p in prices)
+        low = min(p["low"] for p in prices)
+
+        return jsonify({
+            "ticker": ticker,
+            "period": period_key,
+            "current_price": last_close,
+            "change": change,
+            "change_pct": change_pct,
+            "high": high,
+            "low": low,
+            "data_points": len(prices),
+            "prices": prices,
+        })
+
+    except Exception as e:
+        logging.error(f"Price history error for {ticker}/{period_key}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/stock/<ticker>/quote")
+def api_live_quote(ticker):
+    """Return a live quote for a single ticker, falling back to DB price."""
+    live = _get_live_quote(ticker)
+    if live:
+        return jsonify(live)
+
+    # Fallback: pull from database (finviz scrape)
+    columns, row = db_fetchone(f"SELECT price, prev_close FROM stocks WHERE ticker = {P}", (ticker,))
+    if row:
+        db_price = row[0]
+        db_prev = row[1]
+        change = round(db_price - db_prev, 2) if db_price and db_prev else None
+        change_pct = round((change / db_prev) * 100, 2) if db_prev and change else None
+        return jsonify({
+            "price": db_price,
+            "prev_close": db_prev,
+            "change": change,
+            "change_pct": change_pct,
+            "source": "finviz",
+        })
+    return jsonify({"error": "Not found"}), 404
 
 
 @app.route("/api/metrics_guide")
