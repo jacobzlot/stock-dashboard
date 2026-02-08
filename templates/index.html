@@ -140,12 +140,33 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 /* ── Toast ──────────────────── */
 .toast { position: fixed; bottom: 20px; right: 20px; background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary); padding: 10px 20px; border-radius: 8px; font-size: 13px; z-index: 2000; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
 .toast.show { opacity: 1; }
+
+/* ── Price Chart (Robinhood-style) ── */
+.price-hero { padding: 20px 0 8px; }
+.price-hero .price-current { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; }
+.price-hero .price-change { font-size: 15px; font-weight: 500; margin-top: 2px; }
+.price-hero .price-change.up { color: var(--green); }
+.price-hero .price-change.down { color: var(--red); }
+.price-hero .price-change.flat { color: var(--text-muted); }
+.price-hero .price-source { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.price-chart-wrap { position: relative; width: 100%; height: 160px; margin: 12px 0 4px; }
+.price-chart-wrap canvas { width: 100%; height: 100%; }
+.price-chart-wrap .chart-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: var(--text-muted); font-size: 13px; }
+.price-periods { display: flex; gap: 4px; margin-bottom: 16px; }
+.price-periods button { font-size: 12px; font-weight: 600; padding: 4px 14px; border-radius: 16px; cursor: pointer; border: none; background: transparent; color: var(--text-muted); transition: all 0.15s; }
+.price-periods button:hover { color: var(--text-primary); background: var(--bg-hover); }
+.price-periods button.active { background: var(--bg-tertiary); color: var(--green); }
+.price-periods button.active.down { color: var(--red); }
+.price-stats-row { display: flex; gap: 16px; padding: 8px 0 16px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.price-stat { display: flex; flex-direction: column; gap: 1px; }
+.price-stat .ps-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
+.price-stat .ps-value { font-size: 13px; font-weight: 500; }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>📊 <span>Stock</span> Dashboard</h1>
+  <h1><span>Stock</span> Dashboard</h1>
   <div class="header-stats">
     <div class="stat">Stocks: <b id="stat-total">—</b></div>
     <div class="stat">Showing: <b id="stat-showing">—</b></div>
@@ -155,7 +176,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 </div>
 
 <div class="toolbar">
-  <input type="text" class="search-box" id="search" placeholder="🔍 Search ticker or name…">
+  <input type="text" class="search-box" id="search" placeholder="Search ticker or name...">
   <div class="sep"></div>
   <label>Industry</label>
   <select id="filter-industry"><option value="">All Industries</option></select>
@@ -180,10 +201,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
     <div class="view-tab" data-view="all">All Columns</div>
   </div>
   <div class="sep"></div>
-  <button id="btn-columns" title="Customize columns">⚙ Columns</button>
-  <button id="btn-guide" title="Metrics reference guide">📖 Guide</button>
-  <button id="btn-shortlist" class="btn-star" title="Show shortlist only">★ Shortlist</button>
-  <button id="btn-export" title="Export to CSV">⬇ Export</button>
+  <button id="btn-columns" title="Customize columns">Columns</button>
+  <button id="btn-guide" title="Metrics reference guide">Guide</button>
+  <button id="btn-shortlist" class="btn-star" title="Show shortlist only">Shortlist</button>
+  <button id="btn-export" title="Export to CSV">Export</button>
 </div>
 
 <div id="grid" class="ag-theme-alpine-dark"></div>
@@ -205,7 +226,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 <div class="detail-overlay" id="detail-panel">
   <div class="detail-header">
     <h2 id="detail-title">—</h2>
-    <span class="close-btn" id="detail-close">✕</span>
+    <span class="close-btn" id="detail-close">&times;</span>
   </div>
   <div class="detail-body" id="detail-body"></div>
 </div>
@@ -214,8 +235,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 <div class="guide-overlay" id="guide-overlay">
   <div class="guide-panel">
     <div class="guide-header">
-      <h3>📖 Financial Metrics Reference</h3>
-      <span class="close-btn" id="guide-close" style="cursor:pointer;">✕</span>
+      <h3>Financial Metrics Reference</h3>
+      <span class="close-btn" id="guide-close" style="cursor:pointer;">&times;</span>
     </div>
     <div class="guide-body" id="guide-body"></div>
   </div>
@@ -318,20 +339,20 @@ function buildColumnDefs(visibleCols) {
 
   // Star column (always first)
   defs.push({
-    headerName: '★',
+    headerName: '',
     field: '_shortlisted',
     width: 50,
     pinned: 'left',
     sortable: true,
     filter: false,
     cellRenderer: (p) => {
-      return `<span class="star-cell" style="color:${p.value ? 'var(--star)' : 'var(--text-muted)'}">${p.value ? '★' : '☆'}</span>`;
+      return `<span class="star-cell" style="color:${p.value ? 'var(--star)' : 'var(--text-muted)'}">${p.value ? '\u2605' : '\u2606'}</span>`;
     },
     onCellClicked: async (p) => {
       const nowStarred = await toggleShortlist(p.data.ticker);
       p.data._shortlisted = nowStarred;
       p.api.refreshCells({rowNodes: [p.node], columns: ['_shortlisted']});
-      toast(nowStarred ? `★ ${p.data.ticker} added to shortlist` : `☆ ${p.data.ticker} removed`);
+      toast(nowStarred ? `${p.data.ticker} added to shortlist` : `${p.data.ticker} removed`);
     },
   });
 
@@ -521,13 +542,17 @@ function applyColumnPicker() {
 }
 
 // ── Detail Panel ──────────────────────────────────────────
+let currentDetailTicker = null;
+let currentPriceData = null;
+
 async function openDetail(ticker) {
   const panel = document.getElementById('detail-panel');
   const body = document.getElementById('detail-body');
   const title = document.getElementById('detail-title');
-  title.textContent = ticker + ' — Loading…';
+  title.textContent = ticker + ' -- Loading...';
   body.innerHTML = '';
   panel.classList.add('open');
+  currentDetailTicker = ticker;
 
   const data = await fetchDetail(ticker);
   const cm = meta.column_meta || {};
@@ -537,24 +562,59 @@ async function openDetail(ticker) {
     Object.assign(guide, await gr.json());
   } catch(e) {}
 
-  title.textContent = `${data.ticker} — ${data.company_name || ''}`;
+  title.textContent = `${data.ticker} -- ${data.company_name || ''}`;
 
   let html = '';
 
   // Shortlist button
-  html += `<button class="detail-shortlist-btn ${shortlist.has(ticker)?'active':''}" onclick="detailToggleStar('${ticker}', this)">${shortlist.has(ticker) ? '★ On Shortlist' : '☆ Add to Shortlist'}</button>`;
+  html += `<button class="detail-shortlist-btn ${shortlist.has(ticker)?'active':''}" onclick="detailToggleStar('${ticker}', this)">${shortlist.has(ticker) ? 'On Shortlist' : 'Add to Shortlist'}</button>`;
 
-  // Key info
-  html += `<div class="detail-section"><h3>Overview</h3>`;
-  html += metricRow('Industry', data.industry || '—');
-  html += metricRow('Sector', data.sector || '—');
-  html += metricRow('Price', fmtVal(data.price, 'dollar'));
-  html += metricRow('Market Cap', fmtVal(data.market_cap, 'bignum'));
-  html += metricRow('Employees', fmtVal(data.employees, 'bignum'));
-  html += metricRow('IPO Date', data.ipo_date || '—');
+  // -- Robinhood-style Price Hero --
+  const livePrice = data.live_price ?? data.price;
+  const liveChange = data.live_change;
+  const liveChangePct = data.live_change_pct;
+  const priceSource = data.price_source || 'finviz';
+  const changeDir = liveChange > 0 ? 'up' : liveChange < 0 ? 'down' : 'flat';
+  const changeSign = liveChange > 0 ? '+' : '';
+
+  html += `<div class="price-hero">`;
+  html += `<div class="price-current" id="price-current-display">$${livePrice != null ? Number(livePrice).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) : '--'}</div>`;
+  if (liveChange != null && liveChangePct != null) {
+    html += `<div class="price-change ${changeDir}" id="price-change-display">${changeSign}$${liveChange.toFixed(2)} (${changeSign}${liveChangePct.toFixed(2)}%)</div>`;
+  } else {
+    html += `<div class="price-change flat" id="price-change-display"></div>`;
+  }
+  html += `<div class="price-source">${priceSource === 'live' ? 'Live' : 'Last scraped'}</div>`;
   html += `</div>`;
 
-  // Valuation vs Industry
+  // Chart canvas
+  html += `<div class="price-chart-wrap" id="price-chart-wrap"><canvas id="price-chart"></canvas><div class="chart-loading" id="chart-loading">Loading chart...</div></div>`;
+
+  // Period buttons
+  html += `<div class="price-periods" id="price-periods">`;
+  for (const p of ['1D','1W','1M','3M','1Y','5Y']) {
+    html += `<button data-period="${p}" class="${p === '1M' ? 'active' : ''}" onclick="switchPricePeriod('${ticker}','${p}',this)">${p}</button>`;
+  }
+  html += `</div>`;
+
+  // Stats row (populated after chart loads)
+  html += `<div class="price-stats-row" id="price-stats-row">`;
+  html += `<div class="price-stat"><span class="ps-label">Open</span><span class="ps-value" id="ps-open">--</span></div>`;
+  html += `<div class="price-stat"><span class="ps-label">High</span><span class="ps-value" id="ps-high">--</span></div>`;
+  html += `<div class="price-stat"><span class="ps-label">Low</span><span class="ps-value" id="ps-low">--</span></div>`;
+  html += `<div class="price-stat"><span class="ps-label">Prev Close</span><span class="ps-value" id="ps-prev">--</span></div>`;
+  html += `</div>`;
+
+  // Overview section (without Price row since it's in the hero now)
+  html += `<div class="detail-section"><h3>Overview</h3>`;
+  html += metricRow('Industry', data.industry || '--');
+  html += metricRow('Sector', data.sector || '--');
+  html += metricRow('Market Cap', fmtVal(data.market_cap, 'bignum'));
+  html += metricRow('Employees', fmtVal(data.employees, 'bignum'));
+  html += metricRow('IPO Date', data.ipo_date || '--');
+  html += `</div>`;
+
+  // Metric sections with industry comparison
   const avgs = data.industry_averages || {};
   const sections = [
     { title: 'Valuation', keys: ['pe_ratio','forward_pe','peg_ratio','ps_ratio','pb_ratio','pfcf_ratio','ev_ebitda'] },
@@ -572,16 +632,11 @@ async function openDetail(ticker) {
       if (!m) continue;
       const val = data[key];
       const formatted = fmtVal(val, m.fmt);
-      const avgKey = 'avg_' + key.replace('_ratio','').replace('profit_margin','profit_margin').replace('operating_margin','oper_margin');
-
-      // Try to find industry average
       let vsHtml = '';
       const g = guide[key];
       if (g) {
-        const dir = g.direction;
-        vsHtml += ` <span class="vs-industry neutral" title="${g.desc}">ℹ ${g.good_range}</span>`;
+        vsHtml += ` <span class="vs-industry neutral" title="${g.desc}">${g.good_range}</span>`;
       }
-
       html += metricRow(m.label, `<span class="${colorClass(val)}">${formatted}</span>${vsHtml}`);
     }
     html += `</div>`;
@@ -605,6 +660,113 @@ async function openDetail(ticker) {
   }
 
   body.innerHTML = html;
+
+  // Load default chart
+  loadPriceChart(ticker, '1M');
+}
+
+// ── Price Chart (Robinhood-style line) ───────────────────
+async function loadPriceChart(ticker, period) {
+  const loadingEl = document.getElementById('chart-loading');
+  const canvas = document.getElementById('price-chart');
+  if (!canvas) return;
+  if (loadingEl) loadingEl.style.display = 'block';
+
+  try {
+    const r = await fetch(`/api/stock/${ticker}/price_history?period=${period}`);
+    if (!r.ok) throw new Error('No data');
+    const data = await r.json();
+    if (!data.prices || data.prices.length === 0) throw new Error('Empty');
+
+    currentPriceData = data;
+    if (loadingEl) loadingEl.style.display = 'none';
+
+    // Update period change display
+    const isUp = data.change >= 0;
+    const sign = isUp ? '+' : '';
+    const changeEl = document.getElementById('price-change-display');
+    if (changeEl) {
+      changeEl.textContent = `${sign}$${data.change.toFixed(2)} (${sign}${data.change_pct.toFixed(2)}%) ${period}`;
+      changeEl.className = `price-change ${isUp ? 'up' : 'down'}`;
+    }
+
+    // Update period button colors
+    document.querySelectorAll('#price-periods button').forEach(btn => {
+      btn.classList.toggle('down', !isUp);
+    });
+
+    // Update stats row
+    const first = data.prices[0];
+    const elOpen = document.getElementById('ps-open');
+    const elHigh = document.getElementById('ps-high');
+    const elLow = document.getElementById('ps-low');
+    const elPrev = document.getElementById('ps-prev');
+    if (elOpen) elOpen.textContent = '$' + first.open.toFixed(2);
+    if (elHigh) elHigh.textContent = '$' + data.high.toFixed(2);
+    if (elLow) elLow.textContent = '$' + data.low.toFixed(2);
+    if (elPrev) elPrev.textContent = '$' + first.close.toFixed(2);
+
+    drawPriceChart(canvas, data.prices, isUp);
+  } catch(e) {
+    if (loadingEl) loadingEl.textContent = 'Chart unavailable';
+  }
+}
+
+function drawPriceChart(canvas, prices, isUp) {
+  const wrap = canvas.parentElement;
+  const dpr = window.devicePixelRatio || 1;
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+
+  const closes = prices.map(p => p.close);
+  const min = Math.min(...closes);
+  const max = Math.max(...closes);
+  const range = max - min || 1;
+  const padY = 8;
+
+  const lineColor = isUp ? '#3fb950' : '#f85149';
+  const fillColor = isUp ? 'rgba(63,185,80,0.08)' : 'rgba(248,81,73,0.08)';
+
+  // Draw filled area
+  ctx.beginPath();
+  for (let i = 0; i < closes.length; i++) {
+    const x = (i / (closes.length - 1)) * w;
+    const y = padY + ((max - closes[i]) / range) * (h - padY * 2);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  ctx.fillStyle = fillColor;
+  ctx.fill();
+
+  // Draw line
+  ctx.beginPath();
+  for (let i = 0; i < closes.length; i++) {
+    const x = (i / (closes.length - 1)) * w;
+    const y = padY + ((max - closes[i]) / range) * (h - padY * 2);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+}
+
+function switchPricePeriod(ticker, period, btn) {
+  document.querySelectorAll('#price-periods button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadPriceChart(ticker, period);
 }
 
 function metricRow(label, value) {
@@ -614,7 +776,7 @@ function metricRow(label, value) {
 async function detailToggleStar(ticker, btn) {
   const starred = await toggleShortlist(ticker);
   btn.classList.toggle('active', starred);
-  btn.textContent = starred ? '★ On Shortlist' : '☆ Add to Shortlist';
+  btn.textContent = starred ? 'On Shortlist' : 'Add to Shortlist';
   // Update grid row
   if (gridApi) {
     const node = gridApi.getRowNode(ticker);
@@ -641,7 +803,7 @@ async function openGuide() {
         <h4>${g.name}</h4>
         <p>${g.desc}</p>
         <div class="guide-tags">
-          <span class="tag ${dirClass}">${g.direction === 'lower' ? '↓ Lower is better' : g.direction === 'higher' ? '↑ Higher is better' : '↔ Context-dependent'}</span>
+          <span class="tag ${dirClass}">${g.direction === 'lower' ? 'Lower is better' : g.direction === 'higher' ? 'Higher is better' : 'Context-dependent'}</span>
           <span class="tag range">Good: ${g.good_range}</span>
         </div>
       </div>`;
