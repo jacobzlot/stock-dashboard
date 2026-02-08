@@ -2,6 +2,7 @@
 set -e
 
 DB_PATH="${DB_PATH:-/data/stocks.db}"
+PORT="${PORT:-5000}"
 
 # If the database doesn't exist on the volume, copy the seed database
 if [ ! -f "$DB_PATH" ]; then
@@ -17,7 +18,6 @@ if [ ! -f "$DB_PATH" ]; then
 fi
 
 echo "Database: $DB_PATH"
-echo "Starting application..."
+echo "Starting on port: $PORT"
 
-# Execute the CMD
-exec "$@"
+exec gunicorn app:app --bind "0.0.0.0:${PORT}" --workers 2 --timeout 120
