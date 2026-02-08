@@ -84,14 +84,34 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 .detail-section { margin-bottom: 20px; }
 .detail-section h3 { font-size: 14px; color: var(--accent); margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
 .metric-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; border-bottom: 1px solid var(--bg-tertiary); }
-.metric-row .label { color: var(--text-secondary); }
+.metric-row .label { color: var(--text-secondary); position: relative; }
+.metric-row .label.has-tip { cursor: help; border-bottom: 1px dotted var(--text-muted); }
 .metric-row .value { font-weight: 500; }
 .metric-row .vs-industry { font-size: 11px; margin-left: 8px; }
 .metric-row .better { color: var(--green); }
 .metric-row .worse { color: var(--red); }
 .metric-row .neutral { color: var(--text-muted); }
+
+/* ── Metric Tooltip ───────── */
+.metric-tooltip { display: none; position: fixed; z-index: 2000; width: 340px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.45); pointer-events: none; }
+.metric-tooltip.visible { display: block; }
+.metric-tooltip .tt-name { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+.metric-tooltip .tt-desc { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.45; }
+.metric-tooltip .tt-section { margin-bottom: 6px; }
+.metric-tooltip .tt-section-title { font-size: 11px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; }
+.metric-tooltip .tt-section-body { font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
+.metric-tooltip .tt-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.metric-tooltip .tt-tag { font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 600; }
+.metric-tooltip .tt-tag.dir-lower { background: rgba(88,166,255,0.15); color: var(--accent); }
+.metric-tooltip .tt-tag.dir-higher { background: rgba(63,185,80,0.15); color: var(--green); }
+.metric-tooltip .tt-tag.dir-neutral { background: rgba(139,148,158,0.15); color: var(--text-secondary); }
+.metric-tooltip .tt-tag.range { background: rgba(210,153,34,0.15); color: var(--yellow); }
 .detail-shortlist-btn { width: 100%; padding: 8px; border-radius: 6px; font-size: 14px; cursor: pointer; margin-top: 8px; border: 2px solid var(--star); background: transparent; color: var(--star); font-weight: 600; }
 .detail-shortlist-btn.active { background: var(--star); color: #000; }
+.shortlist-tracking { margin-top: 8px; padding: 10px 12px; background: var(--bg-tertiary); border-radius: 8px; font-size: 13px; }
+.shortlist-tracking .sl-row { display: flex; justify-content: space-between; padding: 2px 0; }
+.shortlist-tracking .sl-label { color: var(--text-muted); }
+.shortlist-tracking .sl-value { font-weight: 500; }
 .peer-table { width: 100%; font-size: 12px; border-collapse: collapse; }
 .peer-table th { text-align: left; color: var(--text-muted); padding: 4px 6px; border-bottom: 1px solid var(--border); font-weight: 500; }
 .peer-table td { padding: 4px 6px; border-bottom: 1px solid var(--bg-tertiary); }
@@ -243,6 +263,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="metric-tooltip" id="metric-tooltip"></div>
 
 <script>
 // ── State ─────────────────────────────────────────────────
@@ -250,6 +271,8 @@ let allStocks = [];
 let meta = {};
 let gridApi = null;
 let shortlist = new Set();
+let shortlistDetailed = {};  // {ticker: {added_price, added_at}}
+let metricsGuide = {};       // loaded once from /api/metrics_guide
 let currentView = 'overview';
 let customVisibleCols = null; // null = use view preset
 let shortlistFilterActive = false;
@@ -318,13 +341,20 @@ async function fetchDetail(ticker) {
   return r.json();
 }
 
-async function toggleShortlist(ticker) {
+async function toggleShortlist(ticker, price) {
   const r = await fetch('/api/shortlist', {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ticker, action:'toggle'})
+    body: JSON.stringify({ticker, action:'toggle', price: price || null})
   });
   const data = await r.json();
   shortlist = new Set(data.shortlist);
+  // Update detailed map
+  if (data.shortlist_detailed) {
+    shortlistDetailed = {};
+    for (const d of data.shortlist_detailed) {
+      shortlistDetailed[d.ticker] = {added_price: d.added_price, added_at: d.added_at};
+    }
+  }
   document.getElementById('stat-shortlist').textContent = shortlist.size;
   return data.shortlisted;
 }
@@ -349,7 +379,7 @@ function buildColumnDefs(visibleCols) {
       return `<span class="star-cell" style="color:${p.value ? 'var(--star)' : 'var(--text-muted)'}">${p.value ? '\u2605' : '\u2606'}</span>`;
     },
     onCellClicked: async (p) => {
-      const nowStarred = await toggleShortlist(p.data.ticker);
+      const nowStarred = await toggleShortlist(p.data.ticker, p.data.price);
       p.data._shortlisted = nowStarred;
       p.api.refreshCells({rowNodes: [p.node], columns: ['_shortlisted']});
       toast(nowStarred ? `${p.data.ticker} added to shortlist` : `${p.data.ticker} removed`);
@@ -556,26 +586,42 @@ async function openDetail(ticker) {
 
   const data = await fetchDetail(ticker);
   const cm = meta.column_meta || {};
-  const guide = {};
-  try {
-    const gr = await fetch('/api/metrics_guide');
-    Object.assign(guide, await gr.json());
-  } catch(e) {}
+  const guide = metricsGuide;
 
   title.textContent = `${data.ticker} -- ${data.company_name || ''}`;
 
   let html = '';
 
-  // Shortlist button
-  html += `<button class="detail-shortlist-btn ${shortlist.has(ticker)?'active':''}" onclick="detailToggleStar('${ticker}', this)">${shortlist.has(ticker) ? 'On Shortlist' : 'Add to Shortlist'}</button>`;
-
-  // -- Robinhood-style Price Hero --
+  // -- Robinhood-style Price Hero data --
   const livePrice = data.live_price ?? data.price;
   const liveChange = data.live_change;
   const liveChangePct = data.live_change_pct;
   const priceSource = data.price_source || 'finviz';
   const changeDir = liveChange > 0 ? 'up' : liveChange < 0 ? 'down' : 'flat';
   const changeSign = liveChange > 0 ? '+' : '';
+
+  // Shortlist button
+  const isShortlisted = shortlist.has(ticker);
+  html += `<button class="detail-shortlist-btn ${isShortlisted?'active':''}" onclick="detailToggleStar('${ticker}', this, ${livePrice || 'null'})">${isShortlisted ? 'On Shortlist' : 'Add to Shortlist'}</button>`;
+
+  // Shortlist gain/loss tracking
+  if (isShortlisted && shortlistDetailed[ticker]) {
+    const sl = shortlistDetailed[ticker];
+    if (sl.added_price != null && livePrice != null) {
+      const gain = livePrice - sl.added_price;
+      const gainPct = ((gain / sl.added_price) * 100);
+      const gainDir = gain >= 0 ? 'positive' : 'negative';
+      const gainSign = gain >= 0 ? '+' : '';
+      const addedDate = sl.added_at ? new Date(sl.added_at).toLocaleDateString() : '--';
+      html += `<div class="shortlist-tracking">`;
+      html += `<div class="sl-row"><span class="sl-label">Added Price</span><span class="sl-value">$${Number(sl.added_price).toFixed(2)}</span></div>`;
+      html += `<div class="sl-row"><span class="sl-label">Added Date</span><span class="sl-value">${addedDate}</span></div>`;
+      html += `<div class="sl-row"><span class="sl-label">Since Added</span><span class="sl-value ${gainDir}">${gainSign}$${gain.toFixed(2)} (${gainSign}${gainPct.toFixed(2)}%)</span></div>`;
+      html += `</div>`;
+    }
+  }
+
+  // -- Price Hero display --
 
   html += `<div class="price-hero">`;
   html += `<div class="price-current" id="price-current-display">$${livePrice != null ? Number(livePrice).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) : '--'}</div>`;
@@ -609,9 +655,9 @@ async function openDetail(ticker) {
   html += `<div class="detail-section"><h3>Overview</h3>`;
   html += metricRow('Industry', data.industry || '--');
   html += metricRow('Sector', data.sector || '--');
-  html += metricRow('Market Cap', fmtVal(data.market_cap, 'bignum'));
-  html += metricRow('Employees', fmtVal(data.employees, 'bignum'));
-  html += metricRow('IPO Date', data.ipo_date || '--');
+  html += metricRow('Market Cap', fmtVal(data.market_cap, 'bignum'), 'market_cap');
+  html += metricRow('Employees', fmtVal(data.employees, 'bignum'), 'employees');
+  html += metricRow('IPO Date', data.ipo_date || '--', 'ipo_date');
   html += `</div>`;
 
   // Metric sections with industry comparison
@@ -637,7 +683,7 @@ async function openDetail(ticker) {
       if (g) {
         vsHtml += ` <span class="vs-industry neutral" title="${g.desc}">${g.good_range}</span>`;
       }
-      html += metricRow(m.label, `<span class="${colorClass(val)}">${formatted}</span>${vsHtml}`);
+      html += metricRow(m.label, `<span class="${colorClass(val)}">${formatted}</span>${vsHtml}`, key);
     }
     html += `</div>`;
   }
@@ -769,12 +815,54 @@ function switchPricePeriod(ticker, period, btn) {
   loadPriceChart(ticker, period);
 }
 
-function metricRow(label, value) {
+function metricRow(label, value, metricKey) {
+  if (metricKey && metricsGuide[metricKey]) {
+    return `<div class="metric-row"><span class="label has-tip" data-metric="${metricKey}" onmouseenter="showMetricTip(event, '${metricKey}')" onmouseleave="hideMetricTip()">${label}</span><span class="value">${value}</span></div>`;
+  }
   return `<div class="metric-row"><span class="label">${label}</span><span class="value">${value}</span></div>`;
 }
 
-async function detailToggleStar(ticker, btn) {
-  const starred = await toggleShortlist(ticker);
+function showMetricTip(event, key) {
+  const g = metricsGuide[key];
+  if (!g) return;
+  const tip = document.getElementById('metric-tooltip');
+  const dirClass = g.direction === 'lower' ? 'dir-lower' : g.direction === 'higher' ? 'dir-higher' : 'dir-neutral';
+  const dirLabel = g.direction === 'lower' ? 'Lower is better' : g.direction === 'higher' ? 'Higher is better' : 'Context-dependent';
+
+  let html = `<div class="tt-name">${g.name}</div>`;
+  html += `<div class="tt-desc">${g.desc}</div>`;
+  if (g.calc) {
+    html += `<div class="tt-section"><div class="tt-section-title">How it's calculated</div><div class="tt-section-body">${g.calc}</div></div>`;
+  }
+  if (g.detail) {
+    html += `<div class="tt-section"><div class="tt-section-title">What to look for</div><div class="tt-section-body">${g.detail}</div></div>`;
+  }
+  html += `<div class="tt-tags"><span class="tt-tag ${dirClass}">${dirLabel}</span><span class="tt-tag range">Good: ${g.good_range}</span></div>`;
+
+  tip.innerHTML = html;
+
+  // Position near the label
+  const rect = event.target.getBoundingClientRect();
+  let top = rect.bottom + 6;
+  let left = rect.left;
+
+  // Keep within viewport
+  const tipW = 340;
+  if (left + tipW > window.innerWidth - 10) left = window.innerWidth - tipW - 10;
+  if (left < 10) left = 10;
+  if (top + 300 > window.innerHeight) top = rect.top - 310;
+
+  tip.style.top = top + 'px';
+  tip.style.left = left + 'px';
+  tip.classList.add('visible');
+}
+
+function hideMetricTip() {
+  document.getElementById('metric-tooltip').classList.remove('visible');
+}
+
+async function detailToggleStar(ticker, btn, currentPrice) {
+  const starred = await toggleShortlist(ticker, currentPrice);
   btn.classList.toggle('active', starred);
   btn.textContent = starred ? 'On Shortlist' : 'Add to Shortlist';
   // Update grid row
@@ -784,6 +872,8 @@ async function detailToggleStar(ticker, btn) {
       node.setDataValue('_shortlisted', starred);
     }
   }
+  // Reload detail to show/hide tracking info
+  setTimeout(() => openDetail(ticker), 150);
 }
 
 function closeDetail() {
@@ -794,22 +884,23 @@ function closeDetail() {
 async function openGuide() {
   const body = document.getElementById('guide-body');
   let html = '';
-  try {
-    const r = await fetch('/api/metrics_guide');
-    const guide = await r.json();
+  const guide = metricsGuide;
+  if (Object.keys(guide).length === 0) {
+    html = '<p>Could not load metrics guide.</p>';
+  } else {
     for (const [key, g] of Object.entries(guide)) {
       const dirClass = g.direction === 'lower' ? 'dir-lower' : g.direction === 'higher' ? 'dir-higher' : 'dir-neutral';
       html += `<div class="guide-metric">
         <h4>${g.name}</h4>
         <p>${g.desc}</p>
+        ${g.calc ? `<p style="color:var(--text-muted);font-size:12px;margin-bottom:4px;"><b>Calculation:</b> ${g.calc}</p>` : ''}
+        ${g.detail ? `<p style="font-size:12px;margin-bottom:4px;">${g.detail}</p>` : ''}
         <div class="guide-tags">
           <span class="tag ${dirClass}">${g.direction === 'lower' ? 'Lower is better' : g.direction === 'higher' ? 'Higher is better' : 'Context-dependent'}</span>
           <span class="tag range">Good: ${g.good_range}</span>
         </div>
       </div>`;
     }
-  } catch(e) {
-    html = '<p>Could not load metrics guide.</p>';
   }
   body.innerHTML = html;
   document.getElementById('guide-overlay').classList.add('open');
@@ -831,16 +922,31 @@ async function init() {
   await fetchMeta();
   document.getElementById('stat-total').textContent = meta.total_stocks;
 
+  // Load metrics guide once
+  try {
+    const gr = await fetch('/api/metrics_guide');
+    metricsGuide = await gr.json();
+  } catch(e) {}
+
   // Populate industry filter
   const indSel = document.getElementById('filter-industry');
   for (const ind of meta.industries || []) {
     indSel.innerHTML += `<option value="${ind}">${ind}</option>`;
   }
 
-  // Load shortlist
+  // Load shortlist (simple + detailed)
   const slr = await fetch('/api/shortlist');
   shortlist = new Set(await slr.json());
   document.getElementById('stat-shortlist').textContent = shortlist.size;
+
+  try {
+    const sld = await fetch('/api/shortlist?detailed=true');
+    const detailedArr = await sld.json();
+    shortlistDetailed = {};
+    for (const d of detailedArr) {
+      shortlistDetailed[d.ticker] = {added_price: d.added_price, added_at: d.added_at};
+    }
+  } catch(e) {}
 
   // Load all stocks
   await fetchStocks();
