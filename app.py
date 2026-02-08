@@ -1,45 +1,241 @@
 """
 Stock Analysis Dashboard — Flask Backend
+Supports Postgres (Railway) and SQLite (local dev).
 """
-import sqlite3
-import json
 import os
+import json
+import sqlite3
+from datetime import datetime
 from flask import Flask, render_template, jsonify, request, g
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
 
+# ── Database config ────────────────────────────────────────
+# If DATABASE_URL is set, use Postgres. Otherwise fall back to SQLite.
+DATABASE_URL = os.environ.get("DATABASE_URL")
 DB_PATH = os.environ.get("DB_PATH", "stocks.db")
-SHORTLIST_PATH = os.environ.get("SHORTLIST_PATH", "shortlist.json")
+
+USE_POSTGRES = DATABASE_URL is not None
+
+if USE_POSTGRES:
+    import psycopg2
+    import psycopg2.extras
+    print(f"[DB] Using Postgres")
+else:
+    print(f"[DB] Using SQLite: {DB_PATH}")
+
+# ── Postgres ↔ API column name mapping ────────────────────
+# Postgres uses _pct suffixes, but the frontend expects the original names.
+# PG_TO_API: Postgres column name → API column name sent to frontend
+# API_TO_PG: reverse
+
+PG_TO_API = {
+    'price_change_pct': 'price_change',
+    'profit_margin_pct': 'profit_margin',
+    'operating_margin_pct': 'operating_margin',
+    'gross_margin_pct': 'gross_margin',
+    'roe_pct': 'roe',
+    'roa_pct': 'roa',
+    'roi_pct': 'roi',
+    'roic_pct': 'roic',
+    'eps_growth_ttm_pct': 'eps_growth_ttm',
+    'revenue_growth_ttm_pct': 'revenue_growth_ttm',
+    'eps_growth_next_y_pct': 'eps_growth_next_y',
+    'eps_growth_next_5y_pct': 'eps_growth_next_5y',
+    'eps_past_3y_pct': 'eps_past_3y',
+    'eps_past_5y_pct': 'eps_past_5y',
+    'sales_past_3y_pct': 'sales_past_3y',
+    'sales_past_5y_pct': 'sales_past_5y',
+    'sales_qyq_pct': 'sales_qyq',
+    'eps_qoq_pct': 'eps_qoq',
+    'volatility_week_pct': 'volatility_week',
+    'volatility_month_pct': 'volatility_month',
+    'insider_own_pct': 'insider_own',
+    'insider_trans_pct': 'insider_trans',
+    'inst_own_pct': 'inst_own',
+    'inst_trans_pct': 'inst_trans',
+    'short_float_pct': 'short_float',
+    'dividend_yield_pct': 'dividend_yield',
+    'dividend_yield_est_pct': 'dividend_yield_est',
+    'payout_ratio_pct': 'payout_ratio',
+    'dividend_gr_3y_pct': 'dividend_gr_3y',
+    'dividend_gr_5y_pct': 'dividend_gr_5y',
+    'eps_surprise_pct': 'eps_surprise',
+    'sales_surprise_pct': 'sales_surprise',
+    'perf_week_pct': 'perf_week',
+    'perf_month_pct': 'perf_month',
+    'perf_quarter_pct': 'perf_quarter',
+    'perf_half_y_pct': 'perf_half_y',
+    'perf_year_pct': 'perf_year',
+    'perf_ytd_pct': 'perf_ytd',
+    'perf_3y_pct': 'perf_3y',
+    'perf_5y_pct': 'perf_5y',
+    'perf_10y_pct': 'perf_10y',
+}
+
+API_TO_PG = {v: k for k, v in PG_TO_API.items()}
+
+
+def pg_row_to_api(pg_columns, row):
+    """Convert a Postgres row (with _pct columns) to API dict (without _pct)."""
+    d = {}
+    for i, col in enumerate(pg_columns):
+        api_name = PG_TO_API.get(col, col)
+        val = row[i]
+        # Convert Decimal to float for JSON
+        if hasattr(val, 'as_tuple'):
+            val = float(val)
+        d[api_name] = val
+    return d
+
+
+def api_col_to_pg(api_col):
+    """Convert an API column name to Postgres column name."""
+    return API_TO_PG.get(api_col, api_col)
+
 
 # ── Database helpers ───────────────────────────────────────
 
 def get_db():
-    if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
+    if 'db' not in g:
+        if USE_POSTGRES:
+            g.db = psycopg2.connect(DATABASE_URL)
+        else:
+            g.db = sqlite3.connect(DB_PATH)
+            g.db.row_factory = sqlite3.Row
     return g.db
+
 
 @app.teardown_appcontext
 def close_db(exc):
-    db = g.pop("db", None)
+    db = g.pop('db', None)
     if db:
         db.close()
 
-# ── Shortlist persistence (simple JSON file) ──────────────
+
+def db_execute(query, params=None):
+    """Execute a query, returning (columns, rows). Handles both PG and SQLite."""
+    db = get_db()
+    if USE_POSTGRES:
+        cur = db.cursor()
+        cur.execute(query, params or ())
+        columns = [desc[0] for desc in cur.description] if cur.description else []
+        rows = cur.fetchall()
+        return columns, rows
+    else:
+        cur = db.execute(query, params or ())
+        columns = [desc[0] for desc in cur.description] if cur.description else []
+        rows = cur.fetchall()
+        return columns, rows
+
+
+def db_execute_write(query, params=None):
+    """Execute a write query (INSERT/UPDATE/DELETE)."""
+    db = get_db()
+    if USE_POSTGRES:
+        cur = db.cursor()
+        cur.execute(query, params or ())
+        db.commit()
+    else:
+        db.execute(query, params or ())
+        db.commit()
+
+
+def db_fetchone(query, params=None):
+    """Fetch a single row."""
+    db = get_db()
+    if USE_POSTGRES:
+        cur = db.cursor()
+        cur.execute(query, params or ())
+        columns = [desc[0] for desc in cur.description] if cur.description else []
+        row = cur.fetchone()
+        return columns, row
+    else:
+        cur = db.execute(query, params or ())
+        columns = [desc[0] for desc in cur.description] if cur.description else []
+        row = cur.fetchone()
+        return columns, row
+
+
+def db_param(index=None):
+    """Return the parameter placeholder for the current DB."""
+    return '%s' if USE_POSTGRES else '?'
+
+
+P = '%s' if USE_POSTGRES else '?'
+
+
+# ── Shortlist ─────────────────────────────────────────────
+# Postgres: uses a shortlist table
+# SQLite: uses a JSON file
+
+SHORTLIST_PATH = os.environ.get("SHORTLIST_PATH", "shortlist.json")
+
+
+def _ensure_shortlist_table():
+    """Create shortlist table in Postgres if it doesn't exist."""
+    if USE_POSTGRES:
+        db = get_db()
+        cur = db.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS shortlist (
+                ticker VARCHAR(10) PRIMARY KEY,
+                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        db.commit()
+
 
 def _load_shortlist():
-    if os.path.exists(SHORTLIST_PATH):
-        with open(SHORTLIST_PATH, "r") as f:
-            return json.load(f)
-    return []
+    if USE_POSTGRES:
+        try:
+            _ensure_shortlist_table()
+            cols, rows = db_execute("SELECT ticker FROM shortlist ORDER BY ticker")
+            return [r[0] for r in rows]
+        except Exception:
+            get_db().rollback()
+            return []
+    else:
+        if os.path.exists(SHORTLIST_PATH):
+            with open(SHORTLIST_PATH, 'r') as f:
+                return json.load(f)
+        return []
 
-def _save_shortlist(tickers):
-    with open(SHORTLIST_PATH, "w") as f:
+
+def _save_shortlist_add(ticker):
+    if USE_POSTGRES:
+        _ensure_shortlist_table()
+        db_execute_write(
+            f"INSERT INTO shortlist (ticker) VALUES ({P}) ON CONFLICT (ticker) DO NOTHING",
+            (ticker,)
+        )
+    else:
+        sl = _load_shortlist()
+        if ticker not in sl:
+            sl.append(ticker)
+        _save_shortlist_file(sl)
+
+
+def _save_shortlist_remove(ticker):
+    if USE_POSTGRES:
+        _ensure_shortlist_table()
+        db_execute_write(f"DELETE FROM shortlist WHERE ticker = {P}", (ticker,))
+    else:
+        sl = _load_shortlist()
+        sl = [t for t in sl if t != ticker]
+        _save_shortlist_file(sl)
+
+
+def _save_shortlist_file(tickers):
+    """SQLite fallback: save to JSON file."""
+    with open(SHORTLIST_PATH, 'w') as f:
         json.dump(sorted(set(tickers)), f)
 
+
 # ── Column metadata ───────────────────────────────────────
+# These use API names (no _pct suffix) — the frontend never sees Postgres names.
 
 COLUMN_GROUPS = {
     "identity": {
@@ -126,7 +322,6 @@ COLUMN_GROUPS = {
     },
 }
 
-# Human-readable labels + formatting hints for every column
 COLUMN_META = {
     "ticker": {"label": "Ticker", "fmt": "text"},
     "company_name": {"label": "Company", "fmt": "text"},
@@ -226,6 +421,7 @@ COLUMN_META = {
     "option_short": {"label": "Option/Short", "fmt": "text"},
 }
 
+
 # ── Routes ─────────────────────────────────────────────────
 
 @app.route("/")
@@ -235,78 +431,75 @@ def index():
 
 @app.route("/api/meta")
 def api_meta():
-    """Return column groups, column metadata, and filter options."""
-    db = get_db()
-    industries = [r[0] for r in db.execute(
+    cols, rows = db_execute(
         "SELECT DISTINCT industry FROM stocks WHERE industry IS NOT NULL ORDER BY industry"
-    ).fetchall()]
-    sectors = [r[0] for r in db.execute(
+    )
+    industries = [r[0] for r in rows]
+
+    cols, rows = db_execute(
         "SELECT DISTINCT sector FROM stocks WHERE sector IS NOT NULL AND sector != '' ORDER BY sector"
-    ).fetchall()]
+    )
+    sectors = [r[0] for r in rows]
+
+    cols, rows = db_execute("SELECT COUNT(*) FROM stocks")
+    total = rows[0][0]
 
     return jsonify({
         "column_groups": COLUMN_GROUPS,
         "column_meta": COLUMN_META,
         "industries": industries,
         "sectors": sectors,
-        "total_stocks": db.execute("SELECT COUNT(*) FROM stocks").fetchone()[0],
+        "total_stocks": total,
     })
 
 
 @app.route("/api/stocks")
 def api_stocks():
-    """Return all stock data. Supports query params for filtering."""
-    db = get_db()
-
     where_clauses = []
     params = []
 
     industry = request.args.get("industry")
     if industry:
-        where_clauses.append("industry = ?")
+        where_clauses.append(f"industry = {P}")
         params.append(industry)
 
     sector = request.args.get("sector")
     if sector:
-        where_clauses.append("sector = ?")
+        where_clauses.append(f"sector = {P}")
         params.append(sector)
 
-    # Market cap range filter
     min_cap = request.args.get("min_cap")
     if min_cap:
-        where_clauses.append("market_cap >= ?")
+        where_clauses.append(f"market_cap >= {P}")
         params.append(int(min_cap))
     max_cap = request.args.get("max_cap")
     if max_cap:
-        where_clauses.append("market_cap <= ?")
+        where_clauses.append(f"market_cap <= {P}")
         params.append(int(max_cap))
 
-    # RSI range
     min_rsi = request.args.get("min_rsi")
     if min_rsi:
-        where_clauses.append("rsi >= ?")
+        where_clauses.append(f"rsi >= {P}")
         params.append(float(min_rsi))
     max_rsi = request.args.get("max_rsi")
     if max_rsi:
-        where_clauses.append("rsi <= ?")
+        where_clauses.append(f"rsi <= {P}")
         params.append(float(max_rsi))
 
-    # PE range
     min_pe = request.args.get("min_pe")
     if min_pe:
-        where_clauses.append("pe_ratio >= ?")
+        where_clauses.append(f"pe_ratio >= {P}")
         params.append(float(min_pe))
     max_pe = request.args.get("max_pe")
     if max_pe:
-        where_clauses.append("pe_ratio <= ?")
+        where_clauses.append(f"pe_ratio <= {P}")
         params.append(float(max_pe))
 
-    # Shortlist only
     shortlist_only = request.args.get("shortlist_only")
     if shortlist_only == "true":
         sl = _load_shortlist()
         if sl:
-            placeholders = ",".join("?" * len(sl))
+            placeholders = ",".join([P] * len(sl))
             where_clauses.append(f"ticker IN ({placeholders})")
             params.extend(sl)
         else:
@@ -315,14 +508,16 @@ def api_stocks():
     where = " WHERE " + " AND ".join(where_clauses) if where_clauses else ""
     query = f"SELECT * FROM stocks{where} ORDER BY market_cap DESC NULLS LAST"
 
-    rows = db.execute(query, params).fetchall()
-    columns = [desc[0] for desc in db.execute(f"SELECT * FROM stocks LIMIT 0").description]
+    columns, rows = db_execute(query, params)
+    shortlist_set = set(_load_shortlist())
 
-    shortlist = set(_load_shortlist())
     result = []
     for row in rows:
-        d = {columns[i]: row[i] for i in range(len(columns))}
-        d["_shortlisted"] = d["ticker"] in shortlist
+        if USE_POSTGRES:
+            d = pg_row_to_api(columns, row)
+        else:
+            d = {columns[i]: row[i] for i in range(len(columns))}
+        d["_shortlisted"] = d.get("ticker") in shortlist_set
         result.append(d)
 
     return jsonify(result)
@@ -330,52 +525,90 @@ def api_stocks():
 
 @app.route("/api/stock/<ticker>")
 def api_stock_detail(ticker):
-    """Return full detail + history for a single stock."""
-    db = get_db()
-    row = db.execute("SELECT * FROM stocks WHERE ticker = ?", (ticker,)).fetchone()
+    columns, row = db_fetchone(f"SELECT * FROM stocks WHERE ticker = {P}", (ticker,))
     if not row:
         return jsonify({"error": "Not found"}), 404
 
-    columns = [desc[0] for desc in db.execute("SELECT * FROM stocks LIMIT 0").description]
-    data = {columns[i]: row[i] for i in range(len(columns))}
+    if USE_POSTGRES:
+        data = pg_row_to_api(columns, row)
+    else:
+        data = {columns[i]: row[i] for i in range(len(columns))}
 
-    history = db.execute(
-        "SELECT * FROM stock_history WHERE ticker = ? ORDER BY date", (ticker,)
-    ).fetchall()
-    hist_cols = [desc[0] for desc in db.execute("SELECT * FROM stock_history LIMIT 0").description]
-    data["history"] = [{hist_cols[i]: h[i] for i in range(len(hist_cols))} for h in history]
+    # History
+    h_cols, h_rows = db_execute(
+        f"SELECT * FROM stock_history WHERE ticker = {P} ORDER BY date", (ticker,)
+    )
+    if USE_POSTGRES:
+        data["history"] = [pg_row_to_api(h_cols, h) for h in h_rows]
+    else:
+        data["history"] = [{h_cols[i]: h[i] for i in range(len(h_cols))} for h in h_rows]
 
-    # Industry peers (same industry, top 10 by market cap)
-    if data.get("industry"):
-        peers = db.execute(
-            """SELECT ticker, company_name, price, market_cap, pe_ratio, ps_ratio,
-                      profit_margin, roe, rsi, debt_to_equity, revenue_growth_ttm
-               FROM stocks WHERE industry = ? AND ticker != ?
-               ORDER BY market_cap DESC NULLS LAST LIMIT 10""",
-            (data["industry"], ticker),
-        ).fetchall()
-        data["peers"] = [dict(p) for p in peers]
+    # Industry peers
+    ind = data.get("industry")
+    if ind:
+        # Use Postgres column names for the query
+        if USE_POSTGRES:
+            peer_q = f"""SELECT ticker, company_name, price, market_cap, pe_ratio, ps_ratio,
+                         profit_margin_pct, roe_pct, rsi, debt_to_equity, revenue_growth_ttm_pct
+                         FROM stocks WHERE industry = {P} AND ticker != {P}
+                         ORDER BY market_cap DESC NULLS LAST LIMIT 10"""
+        else:
+            peer_q = f"""SELECT ticker, company_name, price, market_cap, pe_ratio, ps_ratio,
+                         profit_margin, roe, rsi, debt_to_equity, revenue_growth_ttm
+                         FROM stocks WHERE industry = {P} AND ticker != {P}
+                         ORDER BY market_cap DESC NULLS LAST LIMIT 10"""
+
+        p_cols, p_rows = db_execute(peer_q, (ind, ticker))
+        if USE_POSTGRES:
+            data["peers"] = [pg_row_to_api(p_cols, p) for p in p_rows]
+        else:
+            data["peers"] = [{p_cols[i]: p[i] for i in range(len(p_cols))} for p in p_rows]
     else:
         data["peers"] = []
 
     # Industry averages
-    if data.get("industry"):
-        avgs = db.execute(
-            """SELECT
+    if ind:
+        if USE_POSTGRES:
+            avg_q = f"""SELECT
                 AVG(pe_ratio) as avg_pe, AVG(ps_ratio) as avg_ps, AVG(pb_ratio) as avg_pb,
-                AVG(profit_margin) as avg_profit_margin, AVG(operating_margin) as avg_oper_margin,
-                AVG(gross_margin) as avg_gross_margin, AVG(roe) as avg_roe, AVG(roa) as avg_roa,
-                AVG(roic) as avg_roic, AVG(debt_to_equity) as avg_de, AVG(current_ratio) as avg_cr,
-                AVG(revenue_growth_ttm) as avg_rev_growth, AVG(rsi) as avg_rsi, AVG(beta) as avg_beta,
-                AVG(peg_ratio) as avg_peg, AVG(pfcf_ratio) as avg_pfcf,
+                AVG(profit_margin_pct) as avg_profit_margin,
+                AVG(operating_margin_pct) as avg_oper_margin,
+                AVG(gross_margin_pct) as avg_gross_margin,
+                AVG(roe_pct) as avg_roe, AVG(roa_pct) as avg_roa, AVG(roic_pct) as avg_roic,
+                AVG(debt_to_equity) as avg_de, AVG(current_ratio) as avg_cr,
+                AVG(revenue_growth_ttm_pct) as avg_rev_growth, AVG(rsi) as avg_rsi,
+                AVG(beta) as avg_beta, AVG(peg_ratio) as avg_peg, AVG(pfcf_ratio) as avg_pfcf,
                 COUNT(*) as peer_count
-               FROM stocks WHERE industry = ? AND pe_ratio IS NOT NULL""",
-            (data["industry"],),
-        ).fetchone()
-        data["industry_averages"] = dict(avgs) if avgs else {}
+               FROM stocks WHERE industry = {P} AND pe_ratio IS NOT NULL"""
+        else:
+            avg_q = f"""SELECT
+                AVG(pe_ratio) as avg_pe, AVG(ps_ratio) as avg_ps, AVG(pb_ratio) as avg_pb,
+                AVG(profit_margin) as avg_profit_margin,
+                AVG(operating_margin) as avg_oper_margin,
+                AVG(gross_margin) as avg_gross_margin,
+                AVG(roe) as avg_roe, AVG(roa) as avg_roa, AVG(roic) as avg_roic,
+                AVG(debt_to_equity) as avg_de, AVG(current_ratio) as avg_cr,
+                AVG(revenue_growth_ttm) as avg_rev_growth, AVG(rsi) as avg_rsi,
+                AVG(beta) as avg_beta, AVG(peg_ratio) as avg_peg, AVG(pfcf_ratio) as avg_pfcf,
+                COUNT(*) as peer_count
+               FROM stocks WHERE industry = {P} AND pe_ratio IS NOT NULL"""
 
-    shortlist = set(_load_shortlist())
-    data["_shortlisted"] = ticker in shortlist
+        a_cols, a_rows = db_execute(avg_q, (ind,))
+        if a_rows and a_rows[0]:
+            avg_dict = {}
+            for i, col in enumerate(a_cols):
+                val = a_rows[0][i]
+                if hasattr(val, 'as_tuple'):
+                    val = float(val)
+                avg_dict[col] = val
+            data["industry_averages"] = avg_dict
+        else:
+            data["industry_averages"] = {}
+    else:
+        data["industry_averages"] = {}
+
+    shortlist_set = set(_load_shortlist())
+    data["_shortlisted"] = ticker in shortlist_set
 
     return jsonify(data)
 
@@ -392,14 +625,22 @@ def api_shortlist_update():
     action = body.get("action", "toggle")
 
     sl = _load_shortlist()
-    if action == "add" or (action == "toggle" and ticker not in sl):
-        if ticker not in sl:
-            sl.append(ticker)
-    elif action == "remove" or (action == "toggle" and ticker in sl):
-        sl = [t for t in sl if t != ticker]
+    currently_in = ticker in sl
 
-    _save_shortlist(sl)
-    return jsonify({"shortlist": sl, "ticker": ticker, "shortlisted": ticker in sl})
+    if action == "add" or (action == "toggle" and not currently_in):
+        _save_shortlist_add(ticker)
+        shortlisted = True
+    elif action == "remove" or (action == "toggle" and currently_in):
+        _save_shortlist_remove(ticker)
+        shortlisted = False
+    else:
+        shortlisted = currently_in
+
+    return jsonify({
+        "shortlist": _load_shortlist(),
+        "ticker": ticker,
+        "shortlisted": shortlisted,
+    })
 
 
 @app.route("/api/shortlist/bulk", methods=["POST"])
@@ -407,46 +648,62 @@ def api_shortlist_bulk():
     body = request.get_json()
     tickers = body.get("tickers", [])
     action = body.get("action", "add")
-    sl = _load_shortlist()
+
     if action == "add":
-        sl = list(set(sl + tickers))
+        for t in tickers:
+            _save_shortlist_add(t)
     elif action == "remove":
-        sl = [t for t in sl if t not in tickers]
+        for t in tickers:
+            _save_shortlist_remove(t)
     elif action == "set":
-        sl = tickers
-    _save_shortlist(sl)
-    return jsonify({"shortlist": sl})
+        # Clear all, then add
+        if USE_POSTGRES:
+            _ensure_shortlist_table()
+            db_execute_write("DELETE FROM shortlist")
+            for t in tickers:
+                _save_shortlist_add(t)
+        else:
+            _save_shortlist_file(tickers)
+
+    return jsonify({"shortlist": _load_shortlist()})
 
 
 @app.route("/api/industry_stats")
 def api_industry_stats():
-    """Return aggregate stats per industry."""
-    db = get_db()
-    rows = db.execute("""
-        SELECT industry,
-            COUNT(*) as count,
-            AVG(pe_ratio) as avg_pe,
-            AVG(ps_ratio) as avg_ps,
-            AVG(pb_ratio) as avg_pb,
-            AVG(profit_margin) as avg_profit_margin,
-            AVG(roe) as avg_roe,
-            AVG(roa) as avg_roa,
-            AVG(debt_to_equity) as avg_de,
-            AVG(revenue_growth_ttm) as avg_rev_growth,
-            AVG(rsi) as avg_rsi,
-            AVG(market_cap) as avg_market_cap,
-            SUM(market_cap) as total_market_cap
-        FROM stocks
-        WHERE industry IS NOT NULL
-        GROUP BY industry
-        ORDER BY total_market_cap DESC
-    """).fetchall()
-    return jsonify([dict(r) for r in rows])
+    if USE_POSTGRES:
+        q = """SELECT industry, COUNT(*) as count,
+            AVG(pe_ratio) as avg_pe, AVG(ps_ratio) as avg_ps, AVG(pb_ratio) as avg_pb,
+            AVG(profit_margin_pct) as avg_profit_margin, AVG(roe_pct) as avg_roe,
+            AVG(roa_pct) as avg_roa, AVG(debt_to_equity) as avg_de,
+            AVG(revenue_growth_ttm_pct) as avg_rev_growth, AVG(rsi) as avg_rsi,
+            AVG(market_cap) as avg_market_cap, SUM(market_cap) as total_market_cap
+            FROM stocks WHERE industry IS NOT NULL
+            GROUP BY industry ORDER BY total_market_cap DESC"""
+    else:
+        q = """SELECT industry, COUNT(*) as count,
+            AVG(pe_ratio) as avg_pe, AVG(ps_ratio) as avg_ps, AVG(pb_ratio) as avg_pb,
+            AVG(profit_margin) as avg_profit_margin, AVG(roe) as avg_roe,
+            AVG(roa) as avg_roa, AVG(debt_to_equity) as avg_de,
+            AVG(revenue_growth_ttm) as avg_rev_growth, AVG(rsi) as avg_rsi,
+            AVG(market_cap) as avg_market_cap, SUM(market_cap) as total_market_cap
+            FROM stocks WHERE industry IS NOT NULL
+            GROUP BY industry ORDER BY total_market_cap DESC"""
+
+    cols, rows = db_execute(q)
+    result = []
+    for row in rows:
+        d = {}
+        for i, col in enumerate(cols):
+            val = row[i]
+            if hasattr(val, 'as_tuple'):
+                val = float(val)
+            d[col] = val
+        result.append(d)
+    return jsonify(result)
 
 
 @app.route("/api/metrics_guide")
 def api_metrics_guide():
-    """Return the metrics reference guide as JSON."""
     return jsonify(METRICS_GUIDE)
 
 
@@ -454,9 +711,8 @@ def api_metrics_guide():
 
 METRICS_GUIDE = {
     "pe_ratio": {
-        "name": "P/E Ratio", "direction": "lower", "good_range": "10–25",
+        "name": "P/E Ratio", "direction": "lower", "good_range": "10-25",
         "desc": "Price relative to earnings. Lower = cheaper. Compare within industry.",
-        "warning_high": 50, "warning_low": 0,
     },
     "forward_pe": {
         "name": "Forward P/E", "direction": "lower", "good_range": "Below trailing P/E",
@@ -465,14 +721,13 @@ METRICS_GUIDE = {
     "peg_ratio": {
         "name": "PEG Ratio", "direction": "lower", "good_range": "<1 undervalued, 1 fair",
         "desc": "P/E adjusted for growth. <1 = potentially undervalued relative to growth.",
-        "warning_high": 2,
     },
     "ps_ratio": {
         "name": "P/S Ratio", "direction": "lower", "good_range": "<3 for most industries",
         "desc": "Price relative to revenue. Useful for unprofitable companies.",
     },
     "pb_ratio": {
-        "name": "P/B Ratio", "direction": "lower", "good_range": "1–3",
+        "name": "P/B Ratio", "direction": "lower", "good_range": "1-3",
         "desc": "Price relative to book value. <1 could be bargain. Critical for banks.",
     },
     "pfcf_ratio": {
@@ -510,31 +765,26 @@ METRICS_GUIDE = {
     "debt_to_equity": {
         "name": "Debt/Equity", "direction": "lower", "good_range": "<1.0",
         "desc": "Total debt vs equity. <0.5 conservative, >2 high leverage.",
-        "warning_high": 2,
     },
     "current_ratio": {
         "name": "Current Ratio", "direction": "higher", "good_range": ">1.5",
         "desc": "Current assets vs liabilities. <1 = potential liquidity issues.",
-        "warning_low": 1,
     },
     "quick_ratio": {
         "name": "Quick Ratio", "direction": "higher", "good_range": ">1.0",
         "desc": "Liquid assets vs liabilities (excl. inventory).",
-        "warning_low": 0.5,
     },
     "rsi": {
-        "name": "RSI (14)", "direction": "neutral", "good_range": "30–70",
+        "name": "RSI (14)", "direction": "neutral", "good_range": "30-70",
         "desc": "Momentum oscillator. <30 = oversold. >70 = overbought.",
-        "warning_high": 70, "warning_low": 30,
     },
     "beta": {
-        "name": "Beta", "direction": "neutral", "good_range": "0.5–1.5",
+        "name": "Beta", "direction": "neutral", "good_range": "0.5-1.5",
         "desc": "Volatility vs market. 1 = market-like. >1 = more volatile.",
     },
     "short_float": {
         "name": "Short Float", "direction": "lower", "good_range": "<5%",
         "desc": "% of float sold short. >20% = high bearish sentiment / squeeze potential.",
-        "warning_high": 0.2,
     },
     "revenue_growth_ttm": {
         "name": "Revenue Growth TTM", "direction": "higher", "good_range": ">10%",
@@ -545,15 +795,15 @@ METRICS_GUIDE = {
         "desc": "Year-over-year earnings growth.",
     },
     "insider_own": {
-        "name": "Insider Ownership", "direction": "higher", "good_range": "5–20%",
+        "name": "Insider Ownership", "direction": "higher", "good_range": "5-20%",
         "desc": "% held by insiders. Shows alignment with shareholders.",
     },
     "inst_own": {
-        "name": "Institutional Own", "direction": "higher", "good_range": "50–80%",
+        "name": "Institutional Own", "direction": "higher", "good_range": "50-80%",
         "desc": "% held by institutions. Higher = more validation.",
     },
     "recommendation": {
-        "name": "Analyst Rec", "direction": "lower", "good_range": "1–2 (Buy)",
+        "name": "Analyst Rec", "direction": "lower", "good_range": "1-2 (Buy)",
         "desc": "1=Strong Buy, 2=Buy, 3=Hold, 4=Sell, 5=Strong Sell.",
     },
 }
