@@ -26,7 +26,7 @@
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg-primary); color: var(--text-primary); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-/* ── Header ─────────────────── */
+/* -- Header -- */
 .header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
 .header h1 { font-size: 18px; font-weight: 600; white-space: nowrap; }
 .header h1 span { color: var(--accent); }
@@ -34,7 +34,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 .header-stats .stat { display: flex; align-items: center; gap: 4px; }
 .header-stats .stat b { color: var(--text-primary); }
 
-/* ── Toolbar ────────────────── */
+/* -- Toolbar -- */
 .toolbar { background: var(--bg-secondary); border-bottom: 1px solid var(--border); padding: 8px 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex-shrink: 0; }
 .toolbar select, .toolbar input, .toolbar button { font-size: 13px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; outline: none; }
 .toolbar select:hover, .toolbar input:hover { border-color: var(--text-muted); }
@@ -49,13 +49,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 .toolbar .search-box { width: 200px; }
 .badge { background: var(--accent); color: #000; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 10px; margin-left: 4px; }
 
-/* ── View Tabs ──────────────── */
+/* -- View Tabs -- */
 .view-tabs { display: flex; gap: 2px; }
 .view-tab { font-size: 12px; padding: 4px 12px; border-radius: 6px; cursor: pointer; background: transparent; border: 1px solid transparent; color: var(--text-secondary); }
 .view-tab:hover { color: var(--text-primary); background: var(--bg-hover); }
 .view-tab.active { background: var(--bg-tertiary); color: var(--accent); border-color: var(--border); }
 
-/* ── Column Picker Panel ────── */
+/* -- Column Picker Panel -- */
 .column-picker-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; }
 .column-picker-overlay.open { display: flex; align-items: flex-start; justify-content: center; padding-top: 80px; }
 .column-picker { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; width: 700px; max-height: 70vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(0,0,0,0.4); }
@@ -73,8 +73,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 .column-picker .actions button { padding: 6px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text-primary); }
 .column-picker .actions button.primary { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
 
-/* ── Detail Panel ───────────── */
-.detail-overlay { display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 540px; background: var(--bg-secondary); border-left: 1px solid var(--border); z-index: 999; overflow-y: auto; box-shadow: -4px 0 24px rgba(0,0,0,0.3); }
+/* -- Detail Panel -- */
+.detail-overlay { display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 580px; background: var(--bg-secondary); border-left: 1px solid var(--border); z-index: 999; overflow-y: auto; box-shadow: -4px 0 24px rgba(0,0,0,0.3); }
 .detail-overlay.open { display: block; }
 .detail-header { position: sticky; top: 0; background: var(--bg-secondary); padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; z-index: 1; }
 .detail-header h2 { font-size: 18px; }
@@ -84,44 +84,35 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 .detail-section { margin-bottom: 20px; }
 .detail-section h3 { font-size: 14px; color: var(--accent); margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
 .metric-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; border-bottom: 1px solid var(--bg-tertiary); }
-.metric-row .label { color: var(--text-secondary); position: relative; }
-.metric-row .label.has-tip { cursor: help; border-bottom: 1px dotted var(--text-muted); }
+.metric-row .label { color: var(--text-secondary); }
 .metric-row .value { font-weight: 500; }
 .metric-row .vs-industry { font-size: 11px; margin-left: 8px; }
 .metric-row .better { color: var(--green); }
 .metric-row .worse { color: var(--red); }
 .metric-row .neutral { color: var(--text-muted); }
-
-/* ── Metric Tooltip ───────── */
-.ag-header-cell-text { cursor: default; }
-.ag-header-cell[col-id] .ag-header-cell-text { cursor: help; }
-.metric-tooltip { display: none; position: fixed; z-index: 2000; width: 340px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.45); pointer-events: none; }
-.metric-tooltip.visible { display: block; }
-.metric-tooltip .tt-name { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
-.metric-tooltip .tt-desc { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.45; }
-.metric-tooltip .tt-section { margin-bottom: 6px; }
-.metric-tooltip .tt-section-title { font-size: 11px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; }
-.metric-tooltip .tt-section-body { font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
-.metric-tooltip .tt-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.metric-tooltip .tt-tag { font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 600; }
-.metric-tooltip .tt-tag.dir-lower { background: rgba(88,166,255,0.15); color: var(--accent); }
-.metric-tooltip .tt-tag.dir-higher { background: rgba(63,185,80,0.15); color: var(--green); }
-.metric-tooltip .tt-tag.dir-neutral { background: rgba(139,148,158,0.15); color: var(--text-secondary); }
-.metric-tooltip .tt-tag.range { background: rgba(210,153,34,0.15); color: var(--yellow); }
 .detail-shortlist-btn { width: 100%; padding: 8px; border-radius: 6px; font-size: 14px; cursor: pointer; margin-top: 8px; border: 2px solid var(--star); background: transparent; color: var(--star); font-weight: 600; }
 .detail-shortlist-btn.active { background: var(--star); color: #000; }
-.shortlist-tracking { margin-top: 8px; padding: 10px 12px; background: var(--bg-tertiary); border-radius: 8px; font-size: 13px; }
-.shortlist-tracking .sl-row { display: flex; justify-content: space-between; padding: 2px 0; }
-.shortlist-tracking .sl-label { color: var(--text-muted); }
-.shortlist-tracking .sl-value { font-weight: 500; }
-.shortlist-tracking .sl-value.positive { color: var(--green); }
-.shortlist-tracking .sl-value.negative { color: var(--red); }
 .peer-table { width: 100%; font-size: 12px; border-collapse: collapse; }
 .peer-table th { text-align: left; color: var(--text-muted); padding: 4px 6px; border-bottom: 1px solid var(--border); font-weight: 500; }
 .peer-table td { padding: 4px 6px; border-bottom: 1px solid var(--bg-tertiary); }
 .peer-table tr:hover { background: var(--bg-hover); }
 
-/* ── Metrics Guide Panel ────── */
+/* -- Robinhood-style Price Chart -- */
+.price-chart-section { margin-bottom: 20px; }
+.price-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 4px; }
+.price-header .live-price { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; }
+.price-header .price-change { font-size: 14px; font-weight: 500; margin-left: 8px; }
+.price-header .price-source { font-size: 10px; color: var(--text-muted); }
+.chart-container { position: relative; width: 100%; height: 180px; margin: 8px 0; cursor: crosshair; }
+.chart-container canvas { width: 100%; height: 100%; }
+.chart-tooltip { position: absolute; top: 0; left: 0; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 11px; pointer-events: none; display: none; white-space: nowrap; z-index: 2; }
+.period-tabs { display: flex; gap: 4px; margin-top: 8px; }
+.period-tab { font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 14px; cursor: pointer; background: transparent; color: var(--text-muted); border: none; transition: all 0.15s; }
+.period-tab:hover { color: var(--text-primary); }
+.period-tab.active { background: var(--bg-tertiary); color: var(--accent); }
+.chart-loading { display: flex; align-items: center; justify-content: center; height: 180px; color: var(--text-muted); font-size: 13px; }
+
+/* -- Metrics Guide Panel -- */
 .guide-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; }
 .guide-overlay.open { display: flex; align-items: flex-start; justify-content: center; padding-top: 60px; }
 .guide-panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; width: 800px; max-height: 80vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(0,0,0,0.4); }
@@ -137,7 +128,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 .guide-metric .tag.dir-neutral { background: rgba(139,148,158,0.15); color: var(--text-secondary); }
 .guide-metric .tag.range { background: rgba(210,153,34,0.15); color: var(--yellow); }
 
-/* ── AG Grid Theme Override ─── */
+/* -- AG Grid Theme Override -- */
 .ag-theme-alpine-dark {
   --ag-background-color: var(--bg-primary);
   --ag-header-background-color: var(--bg-secondary);
@@ -153,38 +144,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
   flex: 1;
 }
 .ag-theme-alpine-dark .ag-header-cell-label { font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
-
-/* Shortlist star in grid */
 .star-cell { cursor: pointer; text-align: center; font-size: 16px; }
 .star-cell:hover { transform: scale(1.2); }
 .positive { color: var(--green); }
 .negative { color: var(--red); }
 .muted { color: var(--text-muted); }
 
-/* ── Toast ──────────────────── */
+/* -- Toast -- */
 .toast { position: fixed; bottom: 20px; right: 20px; background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary); padding: 10px 20px; border-radius: 8px; font-size: 13px; z-index: 2000; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
 .toast.show { opacity: 1; }
-
-/* ── Price Chart (Robinhood-style) ── */
-.price-hero { padding: 20px 0 8px; }
-.price-hero .price-current { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; }
-.price-hero .price-change { font-size: 15px; font-weight: 500; margin-top: 2px; }
-.price-hero .price-change.up { color: var(--green); }
-.price-hero .price-change.down { color: var(--red); }
-.price-hero .price-change.flat { color: var(--text-muted); }
-.price-hero .price-source { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-.price-chart-wrap { position: relative; width: 100%; height: 160px; margin: 12px 0 4px; }
-.price-chart-wrap canvas { width: 100%; height: 100%; }
-.price-chart-wrap .chart-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: var(--text-muted); font-size: 13px; }
-.price-periods { display: flex; gap: 4px; margin-bottom: 16px; }
-.price-periods button { font-size: 12px; font-weight: 600; padding: 4px 14px; border-radius: 16px; cursor: pointer; border: none; background: transparent; color: var(--text-muted); transition: all 0.15s; }
-.price-periods button:hover { color: var(--text-primary); background: var(--bg-hover); }
-.price-periods button.active { background: var(--bg-tertiary); color: var(--green); }
-.price-periods button.active.down { color: var(--red); }
-.price-stats-row { display: flex; gap: 16px; padding: 8px 0 16px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
-.price-stat { display: flex; flex-direction: column; gap: 1px; }
-.price-stat .ps-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
-.price-stat .ps-value { font-size: 13px; font-weight: 500; }
 </style>
 </head>
 <body>
@@ -192,8 +160,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 <div class="header">
   <h1><span>Stock</span> Dashboard</h1>
   <div class="header-stats">
-    <div class="stat">Stocks: <b id="stat-total">—</b></div>
-    <div class="stat">Showing: <b id="stat-showing">—</b></div>
+    <div class="stat">Stocks: <b id="stat-total">--</b></div>
+    <div class="stat">Showing: <b id="stat-showing">--</b></div>
     <div class="stat">Shortlisted: <b id="stat-shortlist">0</b></div>
     <div class="stat" style="color:var(--text-muted);" id="stat-updated"></div>
   </div>
@@ -208,11 +176,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
   <label>Cap</label>
   <select id="filter-cap">
     <option value="">All</option>
-    <option value="200000000000">Mega (>200B)</option>
-    <option value="10000000000-200000000000">Large (10B–200B)</option>
-    <option value="2000000000-10000000000">Mid (2B–10B)</option>
-    <option value="300000000-2000000000">Small (300M–2B)</option>
-    <option value="0-300000000">Micro (<300M)</option>
+    <option value="200000000000">Mega (&gt;200B)</option>
+    <option value="10000000000-200000000000">Large (10B-200B)</option>
+    <option value="2000000000-10000000000">Mid (2B-10B)</option>
+    <option value="300000000-2000000000">Small (300M-2B)</option>
+    <option value="0-300000000">Micro (&lt;300M)</option>
   </select>
   <div class="sep"></div>
   <div class="view-tabs">
@@ -249,8 +217,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
 <!-- Detail Panel -->
 <div class="detail-overlay" id="detail-panel">
   <div class="detail-header">
-    <h2 id="detail-title">—</h2>
-    <span class="close-btn" id="detail-close">&times;</span>
+    <h2 id="detail-title">--</h2>
+    <span class="close-btn" id="detail-close">&#x2715;</span>
   </div>
   <div class="detail-body" id="detail-body"></div>
 </div>
@@ -260,28 +228,25 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Ar
   <div class="guide-panel">
     <div class="guide-header">
       <h3>Financial Metrics Reference</h3>
-      <span class="close-btn" id="guide-close" style="cursor:pointer;">&times;</span>
+      <span class="close-btn" id="guide-close" style="cursor:pointer;">&#x2715;</span>
     </div>
     <div class="guide-body" id="guide-body"></div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
-<div class="metric-tooltip" id="metric-tooltip"></div>
 
 <script>
-// ── State ─────────────────────────────────────────────────
+// -- State --
 let allStocks = [];
 let meta = {};
 let gridApi = null;
 let shortlist = new Set();
-let shortlistDetailed = {};  // {ticker: {added_price, added_at}}
-let metricsGuide = {};       // loaded once from /api/metrics_guide
 let currentView = 'overview';
-let customVisibleCols = null; // null = use view preset
+let customVisibleCols = null;
 let shortlistFilterActive = false;
 
-// ── View Presets ──────────────────────────────────────────
+// -- View Presets --
 const VIEW_PRESETS = {
   overview: ['ticker','company_name','industry','price','market_cap','pe_ratio','ps_ratio','profit_margin','roe','revenue_growth_ttm','rsi','debt_to_equity','recommendation','target_price'],
   valuation: ['ticker','company_name','industry','price','market_cap','pe_ratio','forward_pe','peg_ratio','ps_ratio','pb_ratio','pc_ratio','pfcf_ratio','ev_sales','ev_ebitda'],
@@ -289,12 +254,12 @@ const VIEW_PRESETS = {
   growth: ['ticker','company_name','industry','price','market_cap','revenue_growth_ttm','eps_growth_ttm','eps_growth_next_y','eps_growth_next_5y','eps_past_3y','eps_past_5y','sales_past_3y','sales_past_5y','eps_surprise','sales_surprise'],
   health: ['ticker','company_name','industry','price','market_cap','debt_to_equity','lt_debt_to_equity','current_ratio','quick_ratio','cash_per_share','book_per_share','short_float','short_ratio','insider_own','inst_own'],
   technical: ['ticker','company_name','industry','price','rsi','beta','atr','volatility_week','volatility_month','sma20','sma50','sma200','week_52_high','week_52_high_pct','week_52_low','week_52_low_pct','rel_volume'],
-  all: null, // show everything
+  all: null,
 };
 
-// ── Format helpers ────────────────────────────────────────
+// -- Format helpers --
 function fmtVal(value, fmt) {
-  if (value === null || value === undefined || value === '') return '—';
+  if (value === null || value === undefined || value === '') return '--';
   const n = Number(value);
   if (isNaN(n) && fmt !== 'text') return value;
   switch(fmt) {
@@ -326,64 +291,93 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-// ── API calls ─────────────────────────────────────────────
-async function fetchMeta() {
-  const r = await fetch('/api/meta');
-  meta = await r.json();
-  return meta;
+// -- API calls --
+async function fetchMeta() { const r = await fetch('/api/meta'); meta = await r.json(); return meta; }
+async function fetchStocks(params = {}) { const q = new URLSearchParams(params).toString(); const r = await fetch('/api/stocks' + (q ? '?' + q : '')); allStocks = await r.json(); return allStocks; }
+async function fetchDetail(ticker) { const r = await fetch('/api/stock/' + ticker); return r.json(); }
+async function toggleShortlist(ticker) {
+  const r = await fetch('/api/shortlist', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ticker, action:'toggle'}) });
+  const data = await r.json(); shortlist = new Set(data.shortlist); document.getElementById('stat-shortlist').textContent = shortlist.size; return data.shortlisted;
 }
 
-async function fetchStocks(params = {}) {
-  const q = new URLSearchParams(params).toString();
-  const r = await fetch('/api/stocks' + (q ? '?' + q : ''));
-  allStocks = await r.json();
-  return allStocks;
+// -- Price History (Yahoo Finance) --
+async function fetchPriceHistory(ticker, period = '1y') {
+  try {
+    const r = await fetch(`/api/stock/${ticker}/price_history?period=${period}`);
+    return await r.json();
+  } catch(e) { return { data: [], error: e.message }; }
 }
 
-async function fetchDetail(ticker) {
-  const r = await fetch('/api/stock/' + ticker);
-  return r.json();
-}
+function drawPriceChart(canvasId, priceData, isUp) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || !priceData || priceData.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.scale(dpr, dpr);
 
-async function toggleShortlist(ticker, price) {
-  const r = await fetch('/api/shortlist', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ticker, action:'toggle', price: price || null})
-  });
-  const data = await r.json();
-  shortlist = new Set(data.shortlist);
-  // Update detailed map
-  if (data.shortlist_detailed) {
-    shortlistDetailed = {};
-    for (const d of data.shortlist_detailed) {
-      shortlistDetailed[d.ticker] = {added_price: d.added_price, added_at: d.added_at};
-    }
+  const W = rect.width, H = rect.height;
+  const prices = priceData.map(d => d.close);
+  const minP = Math.min(...prices), maxP = Math.max(...prices);
+  const range = maxP - minP || 1;
+  const pad = 8;
+
+  const color = isUp ? 'rgb(63, 185, 80)' : 'rgb(248, 81, 73)';
+  const fillColor = isUp ? 'rgba(63, 185, 80, 0.08)' : 'rgba(248, 81, 73, 0.08)';
+
+  // Draw filled area
+  ctx.beginPath();
+  for (let i = 0; i < prices.length; i++) {
+    const x = (i / (prices.length - 1)) * W;
+    const y = pad + (1 - (prices[i] - minP) / range) * (H - pad * 2);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
-  document.getElementById('stat-shortlist').textContent = shortlist.size;
-  return data.shortlisted;
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+  ctx.fillStyle = fillColor; ctx.fill();
+
+  // Draw line
+  ctx.beginPath();
+  for (let i = 0; i < prices.length; i++) {
+    const x = (i / (prices.length - 1)) * W;
+    const y = pad + (1 - (prices[i] - minP) / range) * (H - pad * 2);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // Hover interaction
+  const tooltip = canvas.parentElement.querySelector('.chart-tooltip');
+  canvas.onmousemove = (e) => {
+    const bnd = canvas.getBoundingClientRect();
+    const mx = e.clientX - bnd.left;
+    const idx = Math.round((mx / bnd.width) * (priceData.length - 1));
+    if (idx >= 0 && idx < priceData.length) {
+      const d = priceData[idx];
+      const dateStr = new Date(d.date).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+      tooltip.innerHTML = `<b>$${d.close.toFixed(2)}</b><br>${dateStr}`;
+      tooltip.style.display = 'block';
+      tooltip.style.left = Math.min(mx + 10, bnd.width - 120) + 'px';
+      tooltip.style.top = '4px';
+    }
+  };
+  canvas.onmouseleave = () => { if (tooltip) tooltip.style.display = 'none'; };
 }
 
-// ── Build AG Grid ─────────────────────────────────────────
-function buildColumnDefs(visibleCols, shortlistMode) {
+// -- Build AG Grid --
+function buildColumnDefs(visibleCols) {
   const cm = meta.column_meta || {};
   const allCols = Object.keys(cm);
   const show = visibleCols ? new Set(visibleCols) : null;
-
   const defs = [];
 
-  // Star column (always first)
   defs.push({
-    headerName: '',
-    field: '_shortlisted',
-    width: 50,
-    pinned: 'left',
-    sortable: true,
-    filter: false,
-    cellRenderer: (p) => {
-      return `<span class="star-cell" style="color:${p.value ? 'var(--star)' : 'var(--text-muted)'}">${p.value ? '\u2605' : '\u2606'}</span>`;
-    },
+    headerName: '\u2605', field: '_shortlisted', width: 50, pinned: 'left', sortable: true, filter: false,
+    cellRenderer: (p) => `<span class="star-cell" style="color:${p.value ? 'var(--star)' : 'var(--text-muted)'}">${p.value ? '\u2605' : '\u2606'}</span>`,
     onCellClicked: async (p) => {
-      const nowStarred = await toggleShortlist(p.data.ticker, p.data.price);
+      const nowStarred = await toggleShortlist(p.data.ticker);
       p.data._shortlisted = nowStarred;
       p.api.refreshCells({rowNodes: [p.node], columns: ['_shortlisted']});
       toast(nowStarred ? `${p.data.ticker} added to shortlist` : `${p.data.ticker} removed`);
@@ -391,381 +385,144 @@ function buildColumnDefs(visibleCols, shortlistMode) {
   });
 
   for (const col of allCols) {
-    const m = cm[col];
-    if (!m) continue;
+    const m = cm[col]; if (!m) continue;
     const visible = show === null || show.has(col);
-    const def = {
-      headerName: m.label,
-      field: col,
-      hide: !visible,
-      sortable: true,
-      filter: true,
-      resizable: true,
-      width: col === 'company_name' ? 200 : col === 'ticker' ? 80 : 110,
-    };
+    const def = { headerName: m.label, field: col, hide: !visible, sortable: true, filter: true, resizable: true, width: col === 'company_name' ? 200 : col === 'ticker' ? 80 : 110 };
 
-    // Pin company_name and ticker always
     if (col === 'ticker') {
       def.pinned = 'left';
       def.cellRenderer = (p) => `<span style="color:var(--accent);font-weight:600;cursor:pointer;">${p.value}</span>`;
       def.onCellClicked = (p) => openDetail(p.value);
-    } else if (col === 'company_name') {
-      def.pinned = 'left';
-    }
-    // In shortlist mode, also pin price
-    if (shortlistMode && col === 'price') {
-      def.pinned = 'left';
-      def.headerName = 'Live Price';
-      def.hide = false;
-    }
+    } else if (col === 'company_name') { def.pinned = 'left'; }
 
-    // Format and color
     if (m.fmt === 'pct') {
       def.valueFormatter = (p) => fmtVal(p.value, 'pct');
-      def.cellStyle = (p) => {
-        const c = colorClass(p.value);
-        if (c === 'positive') return {color:'var(--green)'};
-        if (c === 'negative') return {color:'var(--red)'};
-        return {color:'var(--text-muted)'};
-      };
+      def.cellStyle = (p) => { const c = colorClass(p.value); return c === 'positive' ? {color:'var(--green)'} : c === 'negative' ? {color:'var(--red)'} : {color:'var(--text-muted)'}; };
       def.comparator = (a,b) => (a??-Infinity) - (b??-Infinity);
-    } else if (m.fmt === 'dollar') {
-      def.valueFormatter = (p) => fmtVal(p.value, 'dollar');
-      def.comparator = (a,b) => (a??-Infinity) - (b??-Infinity);
-    } else if (m.fmt === 'bignum') {
-      def.valueFormatter = (p) => fmtVal(p.value, 'bignum');
-      def.comparator = (a,b) => (a??-Infinity) - (b??-Infinity);
-    } else if (m.fmt === 'num2' || m.fmt === 'num1') {
-      def.valueFormatter = (p) => fmtVal(p.value, m.fmt);
-      def.comparator = (a,b) => (a??-Infinity) - (b??-Infinity);
-    }
-
+    } else if (m.fmt === 'dollar') { def.valueFormatter = (p) => fmtVal(p.value, 'dollar'); def.comparator = (a,b) => (a??-Infinity) - (b??-Infinity);
+    } else if (m.fmt === 'bignum') { def.valueFormatter = (p) => fmtVal(p.value, 'bignum'); def.comparator = (a,b) => (a??-Infinity) - (b??-Infinity);
+    } else if (m.fmt === 'num2' || m.fmt === 'num1') { def.valueFormatter = (p) => fmtVal(p.value, m.fmt); def.comparator = (a,b) => (a??-Infinity) - (b??-Infinity); }
     defs.push(def);
   }
-
-  // Shortlist-mode extra pinned columns: Added Price, Gain Since Added
-  if (shortlistMode) {
-    // Insert after the price column (find its index)
-    const priceIdx = defs.findIndex(d => d.field === 'price');
-    const insertAt = priceIdx >= 0 ? priceIdx + 1 : defs.length;
-
-    const extraCols = [
-      {
-        headerName: 'Added Price',
-        field: '_added_price',
-        width: 110,
-        pinned: 'left',
-        sortable: true,
-        filter: true,
-        resizable: true,
-        valueFormatter: (p) => fmtVal(p.value, 'dollar'),
-        comparator: (a,b) => (a??-Infinity) - (b??-Infinity),
-      },
-      {
-        headerName: 'Since Added',
-        field: '_gain_since_added_pct',
-        width: 120,
-        pinned: 'left',
-        sortable: true,
-        filter: true,
-        resizable: true,
-        valueFormatter: (p) => {
-          if (p.value == null) return '—';
-          const sign = p.value >= 0 ? '+' : '';
-          return sign + p.value.toFixed(2) + '%';
-        },
-        cellStyle: (p) => {
-          if (p.value == null) return {color:'var(--text-muted)'};
-          return p.value >= 0 ? {color:'var(--green)', fontWeight: 600} : {color:'var(--red)', fontWeight: 600};
-        },
-        comparator: (a,b) => (a??-Infinity) - (b??-Infinity),
-      },
-    ];
-    defs.splice(insertAt, 0, ...extraCols);
-  }
-
   return defs;
 }
 
-function initGrid(data, visibleCols, shortlistMode) {
+function initGrid(data, visibleCols) {
   const el = document.getElementById('grid');
   if (gridApi) { gridApi.destroy(); }
   const gridOptions = {
-    columnDefs: buildColumnDefs(visibleCols, shortlistMode),
-    rowData: data,
+    columnDefs: buildColumnDefs(visibleCols), rowData: data,
     defaultColDef: { sortable: true, resizable: true, filter: true },
-    animateRows: true,
-    rowSelection: 'single',
-    suppressRowClickSelection: true,
-    enableCellTextSelection: true,
+    animateRows: true, rowSelection: 'single', suppressRowClickSelection: true, enableCellTextSelection: true,
     getRowId: (p) => p.data.ticker,
-    onGridReady: (p) => {
-      gridApi = p.api;
-      document.getElementById('stat-showing').textContent = data.length;
-    },
-    onFilterChanged: () => {
-      const count = gridApi.getDisplayedRowCount();
-      document.getElementById('stat-showing').textContent = count;
-    },
+    onGridReady: (p) => { gridApi = p.api; document.getElementById('stat-showing').textContent = data.length; },
+    onFilterChanged: () => { document.getElementById('stat-showing').textContent = gridApi.getDisplayedRowCount(); },
   };
   agGrid.createGrid(el, gridOptions);
-
-  // ── Header tooltip delegation ──
-  // AG Grid re-renders headers; use capture-phase mouseover on the grid container
-  el.removeEventListener('mouseover', _headerTipOver, true);
-  el.removeEventListener('mouseout', _headerTipOut, true);
-  el.addEventListener('mouseover', _headerTipOver, true);
-  el.addEventListener('mouseout', _headerTipOut, true);
-}
-
-// Header tooltip delegation handlers (persistent)
-function _headerTipOver(e) {
-  const textEl = e.target.closest('.ag-header-cell-text');
-  if (!textEl) return;
-  const headerCell = textEl.closest('.ag-header-cell');
-  if (!headerCell) return;
-  const colId = headerCell.getAttribute('col-id');
-  if (colId && metricsGuide[colId]) {
-    showMetricTip({target: textEl}, colId);
-  }
-}
-
-function _headerTipOut(e) {
-  const textEl = e.target.closest('.ag-header-cell-text');
-  if (textEl) hideMetricTip();
 }
 
 function updateGridColumns(visibleCols) {
   if (!gridApi) return;
-  const cm = meta.column_meta || {};
   const show = visibleCols ? new Set(visibleCols) : null;
-  const allCols = gridApi.getColumns();
-  if (!allCols) return;
-  const colState = allCols.map(c => {
-    const id = c.getColId();
-    if (id === '_shortlisted') return null;
-    return { colId: id, hide: show !== null && !show.has(id) };
-  }).filter(Boolean);
+  const allCols = gridApi.getColumns(); if (!allCols) return;
+  const colState = allCols.map(c => { const id = c.getColId(); if (id === '_shortlisted') return null; return { colId: id, hide: show !== null && !show.has(id) }; }).filter(Boolean);
   gridApi.applyColumnState({ state: colState });
 }
 
-function updateGridData(data) {
-  if (!gridApi) return;
-  gridApi.setGridOption('rowData', data);
-  document.getElementById('stat-showing').textContent = data.length;
-}
+function updateGridData(data) { if (!gridApi) return; gridApi.setGridOption('rowData', data); document.getElementById('stat-showing').textContent = data.length; }
 
-// ── Filters ───────────────────────────────────────────────
-let _lastShortlistMode = false;
-
+// -- Filters --
 async function applyFilters() {
   const params = {};
-  const industry = document.getElementById('filter-industry').value;
-  if (industry) params.industry = industry;
+  const industry = document.getElementById('filter-industry').value; if (industry) params.industry = industry;
   const capVal = document.getElementById('filter-cap').value;
-  if (capVal) {
-    if (capVal.includes('-')) {
-      const [min, max] = capVal.split('-');
-      params.min_cap = min; params.max_cap = max;
-    } else {
-      params.min_cap = capVal;
-    }
-  }
+  if (capVal) { if (capVal.includes('-')) { const [min, max] = capVal.split('-'); params.min_cap = min; params.max_cap = max; } else { params.min_cap = capVal; } }
   if (shortlistFilterActive) params.shortlist_only = 'true';
   await fetchStocks(params);
-  // Re-tag shortlist
-  allStocks.forEach(s => {
-    s._shortlisted = shortlist.has(s.ticker);
-    // Inject shortlist tracking data
-    if (shortlistFilterActive && shortlistDetailed[s.ticker]) {
-      const sl = shortlistDetailed[s.ticker];
-      s._added_price = sl.added_price;
-      if (sl.added_price != null && s.price != null) {
-        s._gain_since_added_pct = ((s.price - sl.added_price) / sl.added_price) * 100;
-      } else {
-        s._gain_since_added_pct = null;
-      }
-    }
-  });
-
-  // If shortlist mode changed, rebuild grid (columns changed); otherwise just update data
-  if (shortlistFilterActive !== _lastShortlistMode) {
-    _lastShortlistMode = shortlistFilterActive;
-    const preset = customVisibleCols || VIEW_PRESETS[currentView];
-    initGrid(allStocks, preset, shortlistFilterActive);
-  } else {
-    updateGridData(allStocks);
-  }
+  allStocks.forEach(s => s._shortlisted = shortlist.has(s.ticker));
+  updateGridData(allStocks);
 }
 
-// ── Search ────────────────────────────────────────────────
-function applySearch(text) {
-  if (!gridApi) return;
-  gridApi.setGridOption('quickFilterText', text);
-  setTimeout(() => {
-    document.getElementById('stat-showing').textContent = gridApi.getDisplayedRowCount();
-  }, 100);
-}
+function applySearch(text) { if (!gridApi) return; gridApi.setGridOption('quickFilterText', text); setTimeout(() => { document.getElementById('stat-showing').textContent = gridApi.getDisplayedRowCount(); }, 100); }
+function switchView(view) { currentView = view; customVisibleCols = null; document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view)); updateGridColumns(VIEW_PRESETS[view]); }
 
-// ── Views ─────────────────────────────────────────────────
-function switchView(view) {
-  currentView = view;
-  customVisibleCols = null;
-  document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
-  const preset = VIEW_PRESETS[view];
-  if (shortlistFilterActive) {
-    // Rebuild grid to get shortlist pinned columns with new view preset
-    initGrid(allStocks, preset, true);
-  } else {
-    updateGridColumns(preset);
-  }
-}
-
-// ── Column Picker ─────────────────────────────────────────
+// -- Column Picker --
 function openColumnPicker() {
-  const groups = meta.column_groups;
-  const cm = meta.column_meta;
-  const container = document.getElementById('col-picker-groups');
+  const groups = meta.column_groups, cm = meta.column_meta, container = document.getElementById('col-picker-groups');
   container.innerHTML = '';
-
-  // Get currently visible columns
   const currentlyVisible = new Set();
-  if (gridApi) {
-    gridApi.getColumns().forEach(c => {
-      if (!c.isVisible()) return;
-      if (c.getColId() === '_shortlisted') return;
-      currentlyVisible.add(c.getColId());
-    });
-  }
-
+  if (gridApi) { gridApi.getColumns().forEach(c => { if (!c.isVisible() || c.getColId() === '_shortlisted') return; currentlyVisible.add(c.getColId()); }); }
   for (const [gid, group] of Object.entries(groups)) {
-    const div = document.createElement('div');
-    div.className = 'group';
+    const div = document.createElement('div'); div.className = 'group';
     div.innerHTML = `<div class="group-header"><h4>${group.label}</h4><span class="toggle-all" data-group="${gid}">toggle all</span></div><div class="cols-grid"></div>`;
     const grid = div.querySelector('.cols-grid');
-    for (const col of group.columns) {
-      const m = cm[col];
-      if (!m) continue;
-      const checked = currentlyVisible.has(col) ? 'checked' : '';
-      grid.innerHTML += `<label class="col-item"><input type="checkbox" value="${col}" ${checked}>${m.label}</label>`;
-    }
-    // Toggle all handler
-    div.querySelector('.toggle-all').addEventListener('click', () => {
-      const cbs = div.querySelectorAll('input[type=checkbox]');
-      const allChecked = [...cbs].every(cb => cb.checked);
-      cbs.forEach(cb => cb.checked = !allChecked);
-    });
+    for (const col of group.columns) { const m = cm[col]; if (!m) continue; grid.innerHTML += `<label class="col-item"><input type="checkbox" value="${col}" ${currentlyVisible.has(col)?'checked':''}>${m.label}</label>`; }
+    div.querySelector('.toggle-all').addEventListener('click', () => { const cbs = div.querySelectorAll('input[type=checkbox]'); const all = [...cbs].every(cb => cb.checked); cbs.forEach(cb => cb.checked = !all); });
     container.appendChild(div);
   }
-
   document.getElementById('col-picker-overlay').classList.add('open');
 }
+function closeColumnPicker() { document.getElementById('col-picker-overlay').classList.remove('open'); }
+function applyColumnPicker() { const cbs = document.querySelectorAll('#col-picker-groups input[type=checkbox]:checked'); customVisibleCols = [...cbs].map(cb => cb.value); updateGridColumns(customVisibleCols); closeColumnPicker(); document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active')); }
 
-function closeColumnPicker() {
-  document.getElementById('col-picker-overlay').classList.remove('open');
-}
-
-function applyColumnPicker() {
-  const cbs = document.querySelectorAll('#col-picker-groups input[type=checkbox]:checked');
-  const cols = [...cbs].map(cb => cb.value);
-  customVisibleCols = cols;
-  updateGridColumns(cols);
-  closeColumnPicker();
-  // Deactivate view tabs since it's custom
-  document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
-}
-
-// ── Detail Panel ──────────────────────────────────────────
+// -- Detail Panel with Robinhood-style Price Chart --
 let currentDetailTicker = null;
-let currentPriceData = null;
 
 async function openDetail(ticker) {
+  currentDetailTicker = ticker;
   const panel = document.getElementById('detail-panel');
   const body = document.getElementById('detail-body');
   const title = document.getElementById('detail-title');
   title.textContent = ticker + ' -- Loading...';
   body.innerHTML = '';
   panel.classList.add('open');
-  currentDetailTicker = ticker;
 
   const data = await fetchDetail(ticker);
   const cm = meta.column_meta || {};
-  const guide = metricsGuide;
+  let guide = {};
+  try { const gr = await fetch('/api/metrics_guide'); guide = await gr.json(); } catch(e) {}
 
   title.textContent = `${data.ticker} -- ${data.company_name || ''}`;
 
   let html = '';
 
-  // -- Robinhood-style Price Hero data --
-  const livePrice = data.live_price ?? data.price;
-  const liveChange = data.live_change;
-  const liveChangePct = data.live_change_pct;
-  const priceSource = data.price_source || 'finviz';
-  const changeDir = liveChange > 0 ? 'up' : liveChange < 0 ? 'down' : 'flat';
-  const changeSign = liveChange > 0 ? '+' : '';
-
   // Shortlist button
-  const isShortlisted = shortlist.has(ticker);
-  html += `<button class="detail-shortlist-btn ${isShortlisted?'active':''}" onclick="detailToggleStar('${ticker}', this, ${livePrice || 'null'})">${isShortlisted ? 'On Shortlist' : 'Add to Shortlist'}</button>`;
+  html += `<button class="detail-shortlist-btn ${shortlist.has(ticker)?'active':''}" onclick="detailToggleStar('${ticker}', this)">${shortlist.has(ticker) ? 'On Shortlist' : 'Add to Shortlist'}</button>`;
 
-  // Shortlist gain/loss tracking
-  if (isShortlisted && shortlistDetailed[ticker]) {
-    const sl = shortlistDetailed[ticker];
-    if (sl.added_price != null && livePrice != null) {
-      const gain = livePrice - sl.added_price;
-      const gainPct = ((gain / sl.added_price) * 100);
-      const gainDir = gain >= 0 ? 'positive' : 'negative';
-      const gainSign = gain >= 0 ? '+' : '';
-      const addedDate = sl.added_at ? new Date(sl.added_at).toLocaleDateString() : '--';
-      html += `<div class="shortlist-tracking">`;
-      html += `<div class="sl-row"><span class="sl-label">Added Price</span><span class="sl-value">$${Number(sl.added_price).toFixed(2)}</span></div>`;
-      html += `<div class="sl-row"><span class="sl-label">Added Date</span><span class="sl-value">${addedDate}</span></div>`;
-      html += `<div class="sl-row"><span class="sl-label">Since Added</span><span class="sl-value ${gainDir}">${gainSign}$${gain.toFixed(2)} (${gainSign}${gainPct.toFixed(2)}%)</span></div>`;
-      html += `</div>`;
-    }
-  }
+  // -- Robinhood-style Price Chart Section --
+  html += `<div class="price-chart-section">
+    <div class="price-header">
+      <div>
+        <span class="live-price" id="detail-live-price">${fmtVal(data.price, 'dollar')}</span>
+        <span class="price-change" id="detail-price-change"></span>
+        <div class="price-source" id="detail-price-source">FinViz data</div>
+      </div>
+    </div>
+    <div class="chart-container" id="chart-container">
+      <canvas id="price-canvas"></canvas>
+      <div class="chart-tooltip"></div>
+      <div class="chart-loading" id="chart-loading">Loading price data...</div>
+    </div>
+    <div class="period-tabs" id="period-tabs">
+      <button class="period-tab" data-period="1d">1D</button>
+      <button class="period-tab" data-period="5d">1W</button>
+      <button class="period-tab" data-period="1mo">1M</button>
+      <button class="period-tab" data-period="3mo">3M</button>
+      <button class="period-tab active" data-period="1y">1Y</button>
+      <button class="period-tab" data-period="5y">5Y</button>
+    </div>
+  </div>`;
 
-  // -- Price Hero display --
-
-  html += `<div class="price-hero">`;
-  html += `<div class="price-current" id="price-current-display">$${livePrice != null ? Number(livePrice).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) : '--'}</div>`;
-  if (liveChange != null && liveChangePct != null) {
-    html += `<div class="price-change ${changeDir}" id="price-change-display">${changeSign}$${liveChange.toFixed(2)} (${changeSign}${liveChangePct.toFixed(2)}%)</div>`;
-  } else {
-    html += `<div class="price-change flat" id="price-change-display"></div>`;
-  }
-  html += `<div class="price-source">${priceSource === 'live' ? 'Live' : 'Last scraped'}</div>`;
-  html += `</div>`;
-
-  // Chart canvas
-  html += `<div class="price-chart-wrap" id="price-chart-wrap"><canvas id="price-chart"></canvas><div class="chart-loading" id="chart-loading">Loading chart...</div></div>`;
-
-  // Period buttons
-  html += `<div class="price-periods" id="price-periods">`;
-  for (const p of ['1D','1W','1M','3M','1Y','5Y']) {
-    html += `<button data-period="${p}" class="${p === '1M' ? 'active' : ''}" onclick="switchPricePeriod('${ticker}','${p}',this)">${p}</button>`;
-  }
-  html += `</div>`;
-
-  // Stats row (populated after chart loads)
-  html += `<div class="price-stats-row" id="price-stats-row">`;
-  html += `<div class="price-stat"><span class="ps-label">Open</span><span class="ps-value" id="ps-open">--</span></div>`;
-  html += `<div class="price-stat"><span class="ps-label">High</span><span class="ps-value" id="ps-high">--</span></div>`;
-  html += `<div class="price-stat"><span class="ps-label">Low</span><span class="ps-value" id="ps-low">--</span></div>`;
-  html += `<div class="price-stat"><span class="ps-label">Prev Close</span><span class="ps-value" id="ps-prev">--</span></div>`;
-  html += `</div>`;
-
-  // Overview section (without Price row since it's in the hero now)
+  // Key info
   html += `<div class="detail-section"><h3>Overview</h3>`;
   html += metricRow('Industry', data.industry || '--');
   html += metricRow('Sector', data.sector || '--');
-  html += metricRow('Market Cap', fmtVal(data.market_cap, 'bignum'), 'market_cap');
-  html += metricRow('Employees', fmtVal(data.employees, 'bignum'), 'employees');
-  html += metricRow('IPO Date', data.ipo_date || '--', 'ipo_date');
+  html += metricRow('Market Cap', fmtVal(data.market_cap, 'bignum'));
+  html += metricRow('Employees', fmtVal(data.employees, 'bignum'));
+  html += metricRow('IPO Date', data.ipo_date || '--');
   html += `</div>`;
 
-  // Metric sections with industry comparison
-  const avgs = data.industry_averages || {};
+  // Metric sections
   const sections = [
     { title: 'Valuation', keys: ['pe_ratio','forward_pe','peg_ratio','ps_ratio','pb_ratio','pfcf_ratio','ev_ebitda'] },
     { title: 'Profitability', keys: ['profit_margin','operating_margin','gross_margin','roa','roe','roic'] },
@@ -778,16 +535,12 @@ async function openDetail(ticker) {
   for (const sec of sections) {
     html += `<div class="detail-section"><h3>${sec.title}</h3>`;
     for (const key of sec.keys) {
-      const m = cm[key];
-      if (!m) continue;
-      const val = data[key];
-      const formatted = fmtVal(val, m.fmt);
+      const m = cm[key]; if (!m) continue;
+      const val = data[key], formatted = fmtVal(val, m.fmt);
       let vsHtml = '';
       const g = guide[key];
-      if (g) {
-        vsHtml += ` <span class="vs-industry neutral" title="${g.desc}">${g.good_range}</span>`;
-      }
-      html += metricRow(m.label, `<span class="${colorClass(val)}">${formatted}</span>${vsHtml}`, key);
+      if (g) vsHtml += ` <span class="vs-industry neutral" title="${g.desc}">i ${g.good_range}</span>`;
+      html += metricRow(m.label, `<span class="${colorClass(val)}">${formatted}</span>${vsHtml}`);
     }
     html += `</div>`;
   }
@@ -797,302 +550,133 @@ async function openDetail(ticker) {
     html += `<div class="detail-section"><h3>Industry Peers (${data.industry})</h3>`;
     html += `<table class="peer-table"><tr><th>Ticker</th><th>Company</th><th>Mkt Cap</th><th>P/E</th><th>Margin</th><th>ROE</th></tr>`;
     for (const p of data.peers) {
-      html += `<tr>
-        <td><span style="color:var(--accent);cursor:pointer;" onclick="openDetail('${p.ticker}')">${p.ticker}</span></td>
-        <td>${(p.company_name||'').substring(0,25)}</td>
-        <td>${fmtVal(p.market_cap,'bignum')}</td>
-        <td>${fmtVal(p.pe_ratio,'num2')}</td>
-        <td class="${colorClass(p.profit_margin)}">${fmtVal(p.profit_margin,'pct')}</td>
-        <td class="${colorClass(p.roe)}">${fmtVal(p.roe,'pct')}</td>
-      </tr>`;
+      html += `<tr><td><span style="color:var(--accent);cursor:pointer;" onclick="openDetail('${p.ticker}')">${p.ticker}</span></td>
+        <td>${(p.company_name||'').substring(0,25)}</td><td>${fmtVal(p.market_cap,'bignum')}</td>
+        <td>${fmtVal(p.pe_ratio,'num2')}</td><td class="${colorClass(p.profit_margin)}">${fmtVal(p.profit_margin,'pct')}</td>
+        <td class="${colorClass(p.roe)}">${fmtVal(p.roe,'pct')}</td></tr>`;
     }
     html += `</table></div>`;
   }
 
   body.innerHTML = html;
 
-  // Load default chart
-  loadPriceChart(ticker, '1M');
-}
+  // Load price chart
+  loadPriceChart(ticker, '1y', data.price);
 
-// ── Price Chart (Robinhood-style line) ───────────────────
-async function loadPriceChart(ticker, period) {
-  const loadingEl = document.getElementById('chart-loading');
-  const canvas = document.getElementById('price-chart');
-  if (!canvas) return;
-  if (loadingEl) loadingEl.style.display = 'block';
-
-  try {
-    const r = await fetch(`/api/stock/${ticker}/price_history?period=${period}`);
-    if (!r.ok) throw new Error('No data');
-    const data = await r.json();
-    if (!data.prices || data.prices.length === 0) throw new Error('Empty');
-
-    currentPriceData = data;
-    if (loadingEl) loadingEl.style.display = 'none';
-
-    // Update period change display
-    const isUp = data.change >= 0;
-    const sign = isUp ? '+' : '';
-    const changeEl = document.getElementById('price-change-display');
-    if (changeEl) {
-      changeEl.textContent = `${sign}$${data.change.toFixed(2)} (${sign}${data.change_pct.toFixed(2)}%) ${period}`;
-      changeEl.className = `price-change ${isUp ? 'up' : 'down'}`;
-    }
-
-    // Update period button colors
-    document.querySelectorAll('#price-periods button').forEach(btn => {
-      btn.classList.toggle('down', !isUp);
+  // Period tab click handlers
+  document.querySelectorAll('#period-tabs .period-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      if (currentDetailTicker !== ticker) return;
+      document.querySelectorAll('#period-tabs .period-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      loadPriceChart(ticker, tab.dataset.period, data.price);
     });
+  });
+}
 
-    // Update stats row
-    const first = data.prices[0];
-    const elOpen = document.getElementById('ps-open');
-    const elHigh = document.getElementById('ps-high');
-    const elLow = document.getElementById('ps-low');
-    const elPrev = document.getElementById('ps-prev');
-    if (elOpen) elOpen.textContent = '$' + first.open.toFixed(2);
-    if (elHigh) elHigh.textContent = '$' + data.high.toFixed(2);
-    if (elLow) elLow.textContent = '$' + data.low.toFixed(2);
-    if (elPrev) elPrev.textContent = '$' + first.close.toFixed(2);
+async function loadPriceChart(ticker, period, fallbackPrice) {
+  const loading = document.getElementById('chart-loading');
+  const canvas = document.getElementById('price-canvas');
+  const priceEl = document.getElementById('detail-live-price');
+  const changeEl = document.getElementById('detail-price-change');
+  const sourceEl = document.getElementById('detail-price-source');
 
-    drawPriceChart(canvas, data.prices, isUp);
-  } catch(e) {
-    if (loadingEl) loadingEl.textContent = 'Chart unavailable';
+  if (loading) loading.style.display = 'flex';
+  if (canvas) canvas.style.display = 'none';
+
+  const result = await fetchPriceHistory(ticker, period);
+
+  if (loading) loading.style.display = 'none';
+  if (canvas) canvas.style.display = 'block';
+
+  if (result.data && result.data.length >= 2) {
+    const currentPrice = result.current_price;
+    const changePct = result.period_change_pct;
+    const isUp = changePct >= 0;
+
+    // Update price display with Yahoo Finance live data
+    if (priceEl && currentPrice) {
+      priceEl.textContent = '$' + currentPrice.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+    }
+    if (changeEl && changePct !== null) {
+      const sign = isUp ? '+' : '';
+      changeEl.textContent = `${sign}${(changePct * 100).toFixed(2)}%`;
+      changeEl.style.color = isUp ? 'var(--green)' : 'var(--red)';
+    }
+    if (sourceEl) sourceEl.textContent = 'Yahoo Finance - live';
+
+    drawPriceChart('price-canvas', result.data, isUp);
+  } else {
+    // Fallback to FinViz price
+    if (priceEl && fallbackPrice) priceEl.textContent = fmtVal(fallbackPrice, 'dollar');
+    if (sourceEl) sourceEl.textContent = 'FinViz data (chart unavailable)';
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
   }
 }
 
-function drawPriceChart(canvas, prices, isUp) {
-  const wrap = canvas.parentElement;
-  const dpr = window.devicePixelRatio || 1;
-  const w = wrap.clientWidth;
-  const h = wrap.clientHeight;
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-
-  const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, w, h);
-
-  const closes = prices.map(p => p.close);
-  const min = Math.min(...closes);
-  const max = Math.max(...closes);
-  const range = max - min || 1;
-  const padY = 8;
-
-  const lineColor = isUp ? '#3fb950' : '#f85149';
-  const fillColor = isUp ? 'rgba(63,185,80,0.08)' : 'rgba(248,81,73,0.08)';
-
-  // Draw filled area
-  ctx.beginPath();
-  for (let i = 0; i < closes.length; i++) {
-    const x = (i / (closes.length - 1)) * w;
-    const y = padY + ((max - closes[i]) / range) * (h - padY * 2);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.lineTo(w, h);
-  ctx.lineTo(0, h);
-  ctx.closePath();
-  ctx.fillStyle = fillColor;
-  ctx.fill();
-
-  // Draw line
-  ctx.beginPath();
-  for (let i = 0; i < closes.length; i++) {
-    const x = (i / (closes.length - 1)) * w;
-    const y = padY + ((max - closes[i]) / range) * (h - padY * 2);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.strokeStyle = lineColor;
-  ctx.lineWidth = 1.5;
-  ctx.lineJoin = 'round';
-  ctx.stroke();
-}
-
-function switchPricePeriod(ticker, period, btn) {
-  document.querySelectorAll('#price-periods button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  loadPriceChart(ticker, period);
-}
-
-function metricRow(label, value, metricKey) {
-  if (metricKey && metricsGuide[metricKey]) {
-    return `<div class="metric-row"><span class="label has-tip" data-metric="${metricKey}" onmouseenter="showMetricTip(event, '${metricKey}')" onmouseleave="hideMetricTip()">${label}</span><span class="value">${value}</span></div>`;
-  }
+function metricRow(label, value) {
   return `<div class="metric-row"><span class="label">${label}</span><span class="value">${value}</span></div>`;
 }
 
-function showMetricTip(event, key) {
-  const g = metricsGuide[key];
-  if (!g) return;
-  const tip = document.getElementById('metric-tooltip');
-  const dirClass = g.direction === 'lower' ? 'dir-lower' : g.direction === 'higher' ? 'dir-higher' : 'dir-neutral';
-  const dirLabel = g.direction === 'lower' ? 'Lower is better' : g.direction === 'higher' ? 'Higher is better' : 'Context-dependent';
-
-  let html = `<div class="tt-name">${g.name}</div>`;
-  html += `<div class="tt-desc">${g.desc}</div>`;
-  if (g.calc) {
-    html += `<div class="tt-section"><div class="tt-section-title">How it's calculated</div><div class="tt-section-body">${g.calc}</div></div>`;
-  }
-  if (g.detail) {
-    html += `<div class="tt-section"><div class="tt-section-title">What to look for</div><div class="tt-section-body">${g.detail}</div></div>`;
-  }
-  html += `<div class="tt-tags"><span class="tt-tag ${dirClass}">${dirLabel}</span><span class="tt-tag range">Good: ${g.good_range}</span></div>`;
-
-  tip.innerHTML = html;
-
-  // Position near the label
-  const rect = event.target.getBoundingClientRect();
-  let top = rect.bottom + 6;
-  let left = rect.left;
-
-  // Keep within viewport
-  const tipW = 340;
-  if (left + tipW > window.innerWidth - 10) left = window.innerWidth - tipW - 10;
-  if (left < 10) left = 10;
-  if (top + 300 > window.innerHeight) top = rect.top - 310;
-
-  tip.style.top = top + 'px';
-  tip.style.left = left + 'px';
-  tip.classList.add('visible');
-}
-
-function hideMetricTip() {
-  document.getElementById('metric-tooltip').classList.remove('visible');
-}
-
-async function detailToggleStar(ticker, btn, currentPrice) {
-  const starred = await toggleShortlist(ticker, currentPrice);
+async function detailToggleStar(ticker, btn) {
+  const starred = await toggleShortlist(ticker);
   btn.classList.toggle('active', starred);
   btn.textContent = starred ? 'On Shortlist' : 'Add to Shortlist';
-  // Update grid row
-  if (gridApi) {
-    const node = gridApi.getRowNode(ticker);
-    if (node) {
-      node.setDataValue('_shortlisted', starred);
-    }
-  }
-  // Reload detail to show/hide tracking info
-  setTimeout(() => openDetail(ticker), 150);
+  if (gridApi) { const node = gridApi.getRowNode(ticker); if (node) node.setDataValue('_shortlisted', starred); }
 }
 
-function closeDetail() {
-  document.getElementById('detail-panel').classList.remove('open');
-}
+function closeDetail() { document.getElementById('detail-panel').classList.remove('open'); currentDetailTicker = null; }
 
-// ── Metrics Guide ─────────────────────────────────────────
+// -- Metrics Guide --
 async function openGuide() {
-  const body = document.getElementById('guide-body');
-  let html = '';
-  const guide = metricsGuide;
-  if (Object.keys(guide).length === 0) {
-    html = '<p>Could not load metrics guide.</p>';
-  } else {
+  const body = document.getElementById('guide-body'); let html = '';
+  try {
+    const r = await fetch('/api/metrics_guide'); const guide = await r.json();
     for (const [key, g] of Object.entries(guide)) {
       const dirClass = g.direction === 'lower' ? 'dir-lower' : g.direction === 'higher' ? 'dir-higher' : 'dir-neutral';
-      html += `<div class="guide-metric">
-        <h4>${g.name}</h4>
-        <p>${g.desc}</p>
-        ${g.calc ? `<p style="color:var(--text-muted);font-size:12px;margin-bottom:4px;"><b>Calculation:</b> ${g.calc}</p>` : ''}
-        ${g.detail ? `<p style="font-size:12px;margin-bottom:4px;">${g.detail}</p>` : ''}
-        <div class="guide-tags">
-          <span class="tag ${dirClass}">${g.direction === 'lower' ? 'Lower is better' : g.direction === 'higher' ? 'Higher is better' : 'Context-dependent'}</span>
-          <span class="tag range">Good: ${g.good_range}</span>
-        </div>
-      </div>`;
+      html += `<div class="guide-metric"><h4>${g.name}</h4><p>${g.desc}</p><div class="guide-tags">
+        <span class="tag ${dirClass}">${g.direction === 'lower' ? 'Lower is better' : g.direction === 'higher' ? 'Higher is better' : 'Context-dependent'}</span>
+        <span class="tag range">Good: ${g.good_range}</span></div></div>`;
     }
-  }
-  body.innerHTML = html;
-  document.getElementById('guide-overlay').classList.add('open');
+  } catch(e) { html = '<p>Could not load metrics guide.</p>'; }
+  body.innerHTML = html; document.getElementById('guide-overlay').classList.add('open');
 }
+function closeGuide() { document.getElementById('guide-overlay').classList.remove('open'); }
 
-function closeGuide() {
-  document.getElementById('guide-overlay').classList.remove('open');
-}
+// -- Export --
+function exportCSV() { if (!gridApi) return; gridApi.exportDataAsCsv({ fileName: 'stock_dashboard_export.csv' }); toast('CSV exported'); }
 
-// ── Export ─────────────────────────────────────────────────
-function exportCSV() {
-  if (!gridApi) return;
-  gridApi.exportDataAsCsv({ fileName: 'stock_dashboard_export.csv' });
-  toast('CSV exported');
-}
-
-// ── Init ──────────────────────────────────────────────────
+// -- Init --
 async function init() {
   await fetchMeta();
   document.getElementById('stat-total').textContent = meta.total_stocks;
-
-  // Load metrics guide once
-  try {
-    const gr = await fetch('/api/metrics_guide');
-    metricsGuide = await gr.json();
-  } catch(e) {}
-
-  // Populate industry filter
   const indSel = document.getElementById('filter-industry');
-  for (const ind of meta.industries || []) {
-    indSel.innerHTML += `<option value="${ind}">${ind}</option>`;
-  }
+  for (const ind of meta.industries || []) indSel.innerHTML += `<option value="${ind}">${ind}</option>`;
 
-  // Load shortlist (simple + detailed)
-  const slr = await fetch('/api/shortlist');
-  shortlist = new Set(await slr.json());
+  const slr = await fetch('/api/shortlist'); shortlist = new Set(await slr.json());
   document.getElementById('stat-shortlist').textContent = shortlist.size;
 
-  try {
-    const sld = await fetch('/api/shortlist?detailed=true');
-    const detailedArr = await sld.json();
-    shortlistDetailed = {};
-    for (const d of detailedArr) {
-      shortlistDetailed[d.ticker] = {added_price: d.added_price, added_at: d.added_at};
-    }
-  } catch(e) {}
-
-  // Load all stocks
   await fetchStocks();
   allStocks.forEach(s => s._shortlisted = shortlist.has(s.ticker));
-
-  // Init grid with overview preset
   initGrid(allStocks, VIEW_PRESETS.overview);
 
-  // Event listeners
   document.getElementById('search').addEventListener('input', (e) => applySearch(e.target.value));
   document.getElementById('filter-industry').addEventListener('change', applyFilters);
   document.getElementById('filter-cap').addEventListener('change', applyFilters);
-
-  document.querySelectorAll('.view-tab').forEach(tab => {
-    tab.addEventListener('click', () => switchView(tab.dataset.view));
-  });
-
+  document.querySelectorAll('.view-tab').forEach(tab => { tab.addEventListener('click', () => switchView(tab.dataset.view)); });
   document.getElementById('btn-columns').addEventListener('click', openColumnPicker);
   document.getElementById('col-picker-cancel').addEventListener('click', closeColumnPicker);
   document.getElementById('col-picker-apply').addEventListener('click', applyColumnPicker);
-  document.getElementById('col-picker-reset').addEventListener('click', () => {
-    closeColumnPicker();
-    switchView(currentView);
-  });
-  document.getElementById('col-picker-overlay').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) closeColumnPicker();
-  });
-
+  document.getElementById('col-picker-reset').addEventListener('click', () => { closeColumnPicker(); switchView(currentView); });
+  document.getElementById('col-picker-overlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeColumnPicker(); });
   document.getElementById('btn-guide').addEventListener('click', openGuide);
   document.getElementById('guide-close').addEventListener('click', closeGuide);
-  document.getElementById('guide-overlay').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) closeGuide();
-  });
-
+  document.getElementById('guide-overlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeGuide(); });
   document.getElementById('detail-close').addEventListener('click', closeDetail);
-
-  document.getElementById('btn-shortlist').addEventListener('click', () => {
-    shortlistFilterActive = !shortlistFilterActive;
-    document.getElementById('btn-shortlist').classList.toggle('active', shortlistFilterActive);
-    applyFilters();
-  });
-
+  document.getElementById('btn-shortlist').addEventListener('click', () => { shortlistFilterActive = !shortlistFilterActive; document.getElementById('btn-shortlist').classList.toggle('active', shortlistFilterActive); applyFilters(); });
   document.getElementById('btn-export').addEventListener('click', exportCSV);
 }
 

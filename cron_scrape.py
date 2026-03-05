@@ -108,6 +108,15 @@ def update_postgres(stocks):
     today = date.today().isoformat()
     updated = 0
 
+    # Fix: reset stock_history serial sequence to avoid id collision
+    # (migration inserted explicit ids without advancing the sequence)
+    try:
+        cur.execute("SELECT setval('stock_history_id_seq', COALESCE((SELECT MAX(id) FROM stock_history), 0))")
+        conn.commit()
+    except Exception as e:
+        print(f"  Note: could not reset sequence: {e}")
+        conn.rollback()
+
     for stock in stocks:
         ticker = stock.get('ticker')
         if not ticker:
